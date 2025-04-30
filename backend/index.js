@@ -12,53 +12,160 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-mongoose.connect('mongodb+srv://ashwanix2749:tj94HXLQAcOB6XJK@cluster1.wsuyb84.mongodb.net/upload', {
+mongoose.connect('mongodb+srv://ashwani:FO6tojeGvEONTzCZ@cluster0.dlvwvvm.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 });
 
-const imageSchema = new mongoose.Schema({
-  imageName: String,
-  imagePath: String,
+const documentSchema = new mongoose.Schema({
+  documentName: String,
+  documentPath: String,
+  documentType: String,
+  documentContent: String,
+  uploadedAt: { type: Date, default: Date.now },
 });
-
-const Image = mongoose.model('Image', imageSchema);
-
-app.delete("/deletenote/:id", async (req, res) => {
+const Document = mongoose.model('Document', documentSchema);
+// DELETE API: Delete a document by ID
+app.delete("/deletedocument/:id", async (req, res) => {
   try {
-    const image = await Image.findByIdAndDelete(req.params.id);
-    if (!image) {
-      return res.status(404).send("Image not found");
+    const document = await Document.findByIdAndDelete(req.params.id);
+    if (!document) {
+      return res.status(404).json({ error: "Document not found" });
     }
-
-    res.json({ msg: "Image Deleted" });
+    res.json({ message: "Document deleted successfully" });
   } catch (error) {
-    console.error(error.message);
-    res.status(500).send("Server error");
+    console.error("Error deleting document:", error.message);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
-app.get("/fetchall", async (req, res) => {
+// GET API: Fetch all documents
+app.get("/fetchdocuments", async (req, res) => {
   try {
-    const img = await Image.find();
-    res.json(img);
+    const documents = await Document.find();
+    const formattedDocuments = documents.map((doc) => ({
+      id: doc._id,
+      name: doc.documentName,
+      type: doc.documentType,
+      b64: doc.documentContent, // Include Base64 content
+      uploadedAt: doc.uploadedAt,
+    }));
+    res.json({ documents: formattedDocuments });
   } catch (error) {
-    console.error(error.message);
-    res.status(500).send("Server Error");
+    console.error("Error fetching documents:", error.message);
+    res.status(500).json({ error: "Server error" });
   }
 });
-app.post('/upload', async (req, res) => {
- const {b64}=req.body;
 
+// POST API: Upload a document
+app.post("/uploaddocument", async (req, res) => {
+  const { documents } = req.body; // Expecting an array of documents
   try {
-    const image=await Image.create({imageName:b64});
-    res.json({ message: 'Image uploaded successfully',"image": image });
+    const savedDocuments = await Promise.all(
+      documents.map(async (doc) => {
+        const newDocument = await Document.create({
+          documentName: doc.name,
+          documentType: doc.type,
+          documentContent: doc.b64, // Save Base64 content
+        });
+        return {
+          id: newDocument._id,
+          name: newDocument.documentName,
+          type: newDocument.documentType,
+          b64: newDocument.documentContent, // Include Base64 content
+          uploadedAt: newDocument.uploadedAt,
+        };
+      })
+    );
+    res.json({
+      message: "Documents uploaded successfully",
+      files: savedDocuments,
+    });
   } catch (err) {
-    console.log(err);
-    res.status(500).json({ error: 'Failed to save image to the database' });
+    console.error("Error uploading documents:", err.message);
+    res.status(500).json({ error: "Failed to save documents to the database" });
+  }
+});
+const noteSchema = new mongoose.Schema({
+  text: String,
+  createdAt: { type: Date, default: Date.now },
+});
+
+const Note = mongoose.model('Note', noteSchema);
+
+// POST API: Create a new note
+app.post("/texts", async (req, res) => {
+  const { text } = req.body;
+
+  try {
+    const note = await Note.create({ text });
+    res.json({
+      message: "Note created successfully",
+      note: {
+        id: note._id,
+        text: note.text,
+        createdAt: note.createdAt,
+      },
+    });
+  } catch (error) {
+    console.error("Error creating note:", error.message);
+    res.status(500).json({ error: "Failed to create note" });
   }
 });
 
+// PUT API: Update an existing note
+
+app.put("/texts/:id", async (req, res) => {
+  const { text } = req.body;
+  const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({ error: "Invalid note ID" });
+  }
+
+  try {
+    const note = await Note.findByIdAndUpdate(id, { text }, { new: true });
+    if (!note) {
+      return res.status(404).json({ error: "Note not found" });
+    }
+    res.json({
+      message: "Note updated successfully",
+      note: {
+        id: note._id,
+        text: note.text,
+        createdAt: note.createdAt,
+      },
+    });
+  } catch (error) {
+    console.error("Error updating note:", error.message);
+    res.status(500).json({ error: "Failed to update note" });
+  }
+});
+
+// GET API: Fetch all notes
+app.get("/texts", async (req, res) => {
+  try {
+    const notes = await Note.find();
+    res.json({ texts: notes });
+  } catch (error) {
+    console.error("Error fetching notes:", error.message);
+    res.status(500).json({ error: "Failed to fetch notes" });
+  }
+});
+
+// DELETE API: Delete a note by ID
+app.delete("/texts/:id", async (req, res) => {
+  try {
+    const note = await Note.findByIdAndDelete(req.params.id);
+    if (!note) {
+      return res.status(404).json({ error: "Note not found" });
+    }
+    res.json({ message: "Note deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting note:", error.message);
+    res.status(500).json({ error: "Failed to delete note" });
+  }
+});
 app.get("/", (req, res) => {
   return res.json( "hello i am 3001" );
 });
