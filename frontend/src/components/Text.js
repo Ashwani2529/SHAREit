@@ -143,8 +143,16 @@ const TextManager = () => {
           <tbody>
             {items.map((item, index) => (
               <tr key={item?._id}>
-                <td>{item?.text || null}</td> {/* Render the 'text' property */}
+                <td>{item?.text || null}</td> 
                 <td>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(item?.text || "");
+                    }}
+                    style={{ marginRight: "5px" }}
+                  >
+                    Copy
+                  </button>
                   <button
                     onClick={() => handleEdit(item._id,index)} // Use _id for editing
                     style={{ marginRight: "5px" }}
@@ -152,7 +160,6 @@ const TextManager = () => {
                     Edit
                   </button>
                   <button onClick={() => handleDelete(item._id)}>Delete</button>{" "}
-                  {/* Use _id for deletion */}
                 </td>
               </tr>
             ))}

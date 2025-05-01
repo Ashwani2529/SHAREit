@@ -1,173 +1,207 @@
-import React, { useEffect, useState } from 'react';
-import Page from './Page';
+import React, { useEffect, useState } from "react";
+import Page from "./Page";
+import { createClient } from "@supabase/supabase-js";
 
 const Files = () => {
-    const [files, setFiles] = useState([]);
-    const [uploadedFiles, setUploadedFiles] = useState([]);
-    const [isUploading, setIsUploading] = useState(false);
+  const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+  const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+  const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const handleFileChange = (e) => {
-        setFiles(e.target.files);
-    };
+  const [files, setFiles] = useState([]);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [isUploading, setIsUploading] = useState(false);
 
-    const handleUpload = async () => {
-        setIsUploading(true);
+  const handleFileChange = (e) => {
+    setFiles(e.target.files);
+  };
 
-        try {
-            const encodedFiles = await Promise.all(
-                Array.from(files).map((file) => encodeFileToBase64(file))
-            );
+  const handleUpload = async () => {
+    setIsUploading(true);
+    try {
+      const uploadPromises = Array.from(files).map(async (file) => {
+        const { data, error } = await supabase.storage
+          .from("fileshare-bucket")
+          .upload(`uploads/${file.name}`, file, {
+            cacheControl: "3600",
+            upsert: false,
+          });
 
-            const response = await fetch('https://multer-3w57.onrender.com/uploaddocument', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ documents: encodedFiles }),
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to upload files');
-            }
-
-            const data = await response.json();
-            const uploadedFileList = data.files.map((file) => ({
-                name: file.name,
-                type: file.type || 'Unknown',
-                content: file.b64,
-            }));
-            setUploadedFiles([...uploadedFiles, ...uploadedFileList]);
-            setFiles([]);
-        } catch (error) {
-            console.error('Error uploading files:', error);
-        } finally {
-            setIsUploading(false);
+        if (error) {
+          console.log(data);
+          throw error;
         }
-    };
 
-    const encodeFileToBase64 = (file) => {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = () => resolve({ name: file.name, type: file.type, b64: reader.result });
-            reader.onerror = (error) => reject(error);
-        });
-    };
+        const { data: publicUrlData } = supabase.storage
+          .from("fileshare-bucket")
+          .getPublicUrl(`uploads/${file.name}`);
 
-    const handleDownload = (file) => {
-        try {
-            // Extract the Base64 content and MIME type
-            const base64Data = file.content.split(',')[1]; // Remove the data URL prefix
-            const mimeType = file.type;
-    
-            // Convert Base64 to a binary string
-            const binaryString = atob(base64Data);
-    
-            // Create a Uint8Array from the binary string
-            const binaryData = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-                binaryData[i] = binaryString.charCodeAt(i);
-            }
-    
-            // Create a Blob from the binary data
-            const blob = new Blob([binaryData], { type: mimeType });
-    
-            // Create an object URL from the Blob
-            const url = URL.createObjectURL(blob);
-    
-            // Create a temporary link element to trigger the download
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = file.name;
-            link.click();
-    
-            // Revoke the object URL to free up memory
-            URL.revokeObjectURL(url);
-        } catch (error) {
-            console.error('Error downloading file:', error);
+        return {
+          name: file.name,
+          type: file.type,
+          url: publicUrlData.publicUrl,
+        };
+      });
+      const uploadedFilesData = await Promise.all(uploadPromises);
+      setUploadedFiles((prev) => [...prev, ...uploadedFilesData]);
+      //upload to backend
+      const response = await fetch("https://multer-3w57.onrender.com/uploaddocument", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ documents: uploadedFilesData }),
+      });
+      if (!response.ok) {
+        throw new Error("Failed to upload files to backend");
+      }
+      await response.json();
+      // Clear the file input after upload
+      setFiles([]);
+    } catch (error) {
+      console.error("Error uploading files to Supabase:", error.message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDownload = async (file) => {
+    try {
+      const response = await fetch(file.url);
+      if (!response.ok) {
+        throw new Error("Failed to fetch file for download");
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error downloading file from Supabase:", error.message);
+    }
+  };
+  const handleOpen = async (file) => {
+    window.open(file.url, "_blank");
+  };
+
+  const handleDelete = async (fileName) => {
+    try {
+      const { error } = await supabase.storage
+        .from("fileshare-bucket")
+        .remove([`uploads/${fileName}`]);
+
+      if (error) {
+        throw error;
+      }
+
+      setUploadedFiles((prev) => prev.filter((file) => file.name !== fileName));
+      // Delete from backend
+      const response = await fetch(
+        `https://multer-3w57.onrender.com/deletedocument/${fileName}`,
+        {
+          method: "DELETE",
         }
-    };
+      );
+      if (!response.ok) {
+        throw new Error("Failed to delete file from backend");
+      }
+      await response.json();
+    } catch (error) {
+      console.error("Error deleting file from Supabase:", error.message);
+    }
+  };
 
-    const handleDelete = (index) => {
-        const updatedFiles = uploadedFiles.filter((_, i) => i !== index);
-        setUploadedFiles(updatedFiles);
-    };
-useEffect(() => {
+  useEffect(() => {
     const fetchFiles = async () => {
-        try {
-            const response = await fetch('https://multer-3w57.onrender.com/fetchdocuments');
-            if (!response.ok) {
-                throw new Error('Failed to fetch files');
-            }
-
-            const data = await response.json();
-            const fileList = data.documents.map((file) => ({
-                name: file.name,
-                type: file.type || 'Unknown',
-                content: file.b64
-            }));
-            setUploadedFiles(fileList);
-        } catch (error) {
-            console.error('Error fetching files:', error);
+      try {
+        const response = await fetch("https://multer-3w57.onrender.com/fetchdocuments");
+        if (!response.ok) {
+          throw new Error("Failed to fetch files");
         }
+
+        const data = await response.json();
+        const fileList = data.documents.map((file) => ({
+          name: file.name,
+          type: file.type || "Unknown",
+          url: file.url,
+        }));
+        setUploadedFiles(fileList);
+      } catch (error) {
+        console.error("Error fetching files:", error);
+      }
     };
     fetchFiles();
-}
-, []);
-    return (
-        <>
-            <Page />
-            <div style={{ padding: '20px' }}>
-                <h2>File Upload</h2>
-                <input
-                    type="file"
-                    multiple
-                    onChange={(e) => {
-                        handleFileChange(e);
-                    }}
-                />
-                <button
-                    onClick={handleUpload}
-                    disabled={!files.length || isUploading}
-                    style={{ marginLeft: '10px' }}
-                >
-                    {isUploading ? 'Uploading...' : 'Upload'}
-                </button>
+  }, []);
 
-                <h3>Uploaded Files</h3>
-                {uploadedFiles.length > 0 ? (
-                    <table border="1" cellPadding="10" style={{ marginTop: '20px', width: '100%' }}>
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Type</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {uploadedFiles?.map((file, index) => (
-                                <tr key={index}>
-                                    <td>{file.name}</td>
-                                    <td>{file.type}</td>
-                                    <td>
-                                        <button
-                                            onClick={() => handleDownload(file)}
-                                            style={{ marginRight: '10px' }}
-                                        >
-                                            Download
-                                        </button>
-                                        <button onClick={() => handleDelete(index)}>Delete</button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                ) : (
-                    <p>No files uploaded yet.</p>
-                )}
-            </div>
-        </>
-    );
+  return (
+    <>
+      <Page />
+      <div style={{ padding: "20px" }}>
+        <h2>File Upload</h2>
+        <input
+          type="file"
+          multiple
+          onChange={(e) => {
+            handleFileChange(e);
+          }}
+        />
+        <button
+          onClick={handleUpload}
+          disabled={!files.length || isUploading}
+          style={{ marginLeft: "10px" }}
+        >
+          {isUploading ? "Uploading..." : "Upload"}
+        </button>
+
+        <h3>Uploaded Files</h3>
+        {uploadedFiles.length > 0 ? (
+          <table
+            border="1"
+            cellPadding="10"
+            style={{ marginTop: "20px", width: "100%" }}
+          >
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {uploadedFiles?.map((file, index) => (
+                <tr key={index}>
+                  <td>{file.name}</td>
+                  <td>{file.type}</td>
+                  <td>
+                    <button
+                      onClick={() => handleOpen(file)}
+                      style={{ marginRight: "10px" }}
+                    >
+                      Open
+                    </button>
+                    <button
+                      onClick={() => handleDownload(file)}
+                      style={{ marginRight: "10px" }}
+                    >
+                      Download
+                    </button>
+                    <button onClick={() => handleDelete(file.name)}>
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p>No files uploaded yet.</p>
+        )}
+      </div>
+    </>
+  );
 };
 
 export default Files;

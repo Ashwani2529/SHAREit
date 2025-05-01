@@ -1,18 +1,20 @@
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
 const app = express();
 const PORT = 3001;
+require("dotenv").config();
+app.use(express.json({ limit: "25mb" }));
 
-app.use(express.json({ limit: '25mb' }));
+app.use(
+  cors({
+    origin: "https://image-upload69.netlify.app",
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 
-app.use(cors({
-  origin: 'https://image-upload69.netlify.app',
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-
-mongoose.connect('mongodb+srv://ashwani:FO6tojeGvEONTzCZ@cluster0.dlvwvvm.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0', {
+mongoose.connect(process.env.MONGO_URL, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 });
@@ -24,7 +26,7 @@ const documentSchema = new mongoose.Schema({
   documentContent: String,
   uploadedAt: { type: Date, default: Date.now },
 });
-const Document = mongoose.model('Document', documentSchema);
+const Document = mongoose.model("Document", documentSchema);
 // DELETE API: Delete a document by ID
 app.delete("/deletedocument/:id", async (req, res) => {
   try {
@@ -47,7 +49,7 @@ app.get("/fetchdocuments", async (req, res) => {
       id: doc._id,
       name: doc.documentName,
       type: doc.documentType,
-      b64: doc.documentContent, // Include Base64 content
+      url: doc.documentContent, // Include Base64 content
       uploadedAt: doc.uploadedAt,
     }));
     res.json({ documents: formattedDocuments });
@@ -66,13 +68,13 @@ app.post("/uploaddocument", async (req, res) => {
         const newDocument = await Document.create({
           documentName: doc.name,
           documentType: doc.type,
-          documentContent: doc.b64, // Save Base64 content
+          documentContent: doc.url,
         });
         return {
           id: newDocument._id,
           name: newDocument.documentName,
           type: newDocument.documentType,
-          b64: newDocument.documentContent, // Include Base64 content
+          url: newDocument.documentContent, // Include Base64 content
           uploadedAt: newDocument.uploadedAt,
         };
       })
@@ -91,7 +93,7 @@ const noteSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
-const Note = mongoose.model('Note', noteSchema);
+const Note = mongoose.model("Note", noteSchema);
 
 // POST API: Create a new note
 app.post("/texts", async (req, res) => {
@@ -167,7 +169,7 @@ app.delete("/texts/:id", async (req, res) => {
   }
 });
 app.get("/", (req, res) => {
-  return res.json( "hello i am 3001" );
+  return res.json("hello i am 3001");
 });
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);

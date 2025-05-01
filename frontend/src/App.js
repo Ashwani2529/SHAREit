@@ -12,7 +12,7 @@ const App = () => {
   <Router>
     <Routes>
     <Route path="/" element={<>
-      <h1 className="text-center">Welcome to the Data Uploader</h1>
+      <h1 className="text-center">Welcome to SHAREit</h1>
       <Page /></>
     } />
     <Route path="/files" element={<Files />} />
