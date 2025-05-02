@@ -44,7 +44,7 @@ const Files = () => {
       const uploadedFilesData = await Promise.all(uploadPromises);
       setUploadedFiles((prev) => [...prev, ...uploadedFilesData]);
       //upload to backend
-      const response = await fetch("http://localhost:3001/uploaddocument", {
+      const response = await fetch("https://multer-3w57.onrender.com/uploaddocument", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -100,7 +100,7 @@ const Files = () => {
       setUploadedFiles((prev) => prev.filter((file) => file.name !== fileName));
       // Delete from backend
       const response = await fetch(
-        `http://localhost:3001/deletedocument/${fileName}`,
+        `https://multer-3w57.onrender.com/deletedocument/${fileName}`,
         {
           method: "DELETE",
         }
@@ -116,7 +116,7 @@ const Files = () => {
   };
   const fetchFiles = async () => {
     try {
-      const response = await fetch("http://localhost:3001/fetchdocuments");
+      const response = await fetch("https://multer-3w57.onrender.com/fetchdocuments");
       if (!response.ok) {
         throw new Error("Failed to fetch files");
       }

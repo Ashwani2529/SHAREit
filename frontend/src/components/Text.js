@@ -13,7 +13,7 @@ const TextManager = () => {
   // Fetch all text items from the backend
   const fetchItems = async () => {
     try {
-      const response = await fetch("http://localhost:3001/texts", {
+      const response = await fetch("https://multer-3w57.onrender.com/texts", {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -35,7 +35,7 @@ const TextManager = () => {
       // Update existing item
       try {
         const response = await fetch(
-          `http://localhost:3001/texts/${editIndex}`,
+          `https://multer-3w57.onrender.com/texts/${editIndex}`,
           {
             method: "PUT",
             headers: {
@@ -59,7 +59,7 @@ const TextManager = () => {
     } else {
       // Add new item
       try {
-        const response = await fetch("http://localhost:3001/texts", {
+        const response = await fetch("https://multer-3w57.onrender.com/texts", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -82,7 +82,7 @@ const TextManager = () => {
   // Delete a text item
   const handleDelete = async (id) => {
     try {
-      const response = await fetch(`http://localhost:3001/texts/${id}`, {
+      const response = await fetch(`https://multer-3w57.onrender.com/texts/${id}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
