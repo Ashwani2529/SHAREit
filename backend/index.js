@@ -8,7 +8,7 @@ app.use(express.json({ limit: "25mb" }));
 
 app.use(
   cors({
-    origin: "https://image-upload69.netlify.app",
+    origin: "https://shareit-lite.netlify.app",
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
