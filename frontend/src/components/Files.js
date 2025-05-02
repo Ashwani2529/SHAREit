@@ -19,7 +19,7 @@ const Files = () => {
     setIsUploading(true);
     try {
       const uploadPromises = Array.from(files).map(async (file) => {
-        const { data, error } = await supabase.storage
+        const { error } = await supabase.storage
           .from("fileshare-bucket")
           .upload(`uploads/${file.name}`, file, {
             cacheControl: "3600",
@@ -93,7 +93,7 @@ const Files = () => {
 
   const handleDelete = async (fileName) => {
     try {
-      const { error } = await supabase.storage
+       await supabase.storage
         .from("fileshare-bucket")
         .remove([`uploads/${fileName}`]);
 
