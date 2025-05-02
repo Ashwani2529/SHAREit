@@ -34,7 +34,6 @@ app.delete("/deletedocument/:id", async (req, res) => {
       return res.status(400).json({ error: "Document ID is required" });
     }
     const document = await Document.findByIdAndDelete(req.params.id);
-    console.log("Document deleted:", document);
     if (!document) {
       return res.status(404).json({ error: "Document not found" });
     }
@@ -79,7 +78,6 @@ app.post("/uploaddocument", async (req, res) => {
           documentSize: doc.size,
           documentUrl: doc.url,
         });
-        console.log("Document saved:", savedDocuments);
         return {
           id: newDocument._id,
           name: newDocument.documentName,
