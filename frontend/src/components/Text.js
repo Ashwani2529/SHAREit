@@ -13,7 +13,7 @@ const TextManager = () => {
   // Fetch all text items from the backend
   const fetchItems = async () => {
     try {
-      const response = await fetch("https://multer-3w57.onrender.com/texts", {
+      const response = await fetch("http://localhost:3001/texts", {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -35,7 +35,7 @@ const TextManager = () => {
       // Update existing item
       try {
         const response = await fetch(
-          `https://multer-3w57.onrender.com/texts/${editIndex}`,
+          `http://localhost:3001/texts/${editIndex}`,
           {
             method: "PUT",
             headers: {
@@ -52,13 +52,14 @@ const TextManager = () => {
         setItems(updatedItems);
         setEditIndex(null);
         setShowModal(false); // Close the modal after updating
+        fetchItems();
       } catch (error) {
         console.error("Error updating item:", error);
       }
     } else {
       // Add new item
       try {
-        const response = await fetch("https://multer-3w57.onrender.com/texts", {
+        const response = await fetch("http://localhost:3001/texts", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -70,6 +71,7 @@ const TextManager = () => {
         }
         const data = await response.json();
         setItems([...items, data.text]);
+        fetchItems();
       } catch (error) {
         console.error("Error adding item:", error);
       }
@@ -80,7 +82,7 @@ const TextManager = () => {
   // Delete a text item
   const handleDelete = async (id) => {
     try {
-      const response = await fetch(`https://multer-3w57.onrender.com/texts/${id}`, {
+      const response = await fetch(`http://localhost:3001/texts/${id}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
@@ -90,6 +92,7 @@ const TextManager = () => {
         throw new Error("Failed to delete item");
       }
       setItems(items.filter((item) => item._id !== id)); // Filter out the deleted item
+      fetchItems();
     } catch (error) {
       console.error("Error deleting item:", error);
     }

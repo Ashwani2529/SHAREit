@@ -27,7 +27,6 @@ const Files = () => {
           });
 
         if (error) {
-          console.log(data);
           throw error;
         }
 
@@ -39,12 +38,13 @@ const Files = () => {
           name: file.name,
           type: file.type,
           url: publicUrlData.publicUrl,
+          size: file.size,
         };
       });
       const uploadedFilesData = await Promise.all(uploadPromises);
       setUploadedFiles((prev) => [...prev, ...uploadedFilesData]);
       //upload to backend
-      const response = await fetch("https://multer-3w57.onrender.com/uploaddocument", {
+      const response = await fetch("http://localhost:3001/uploaddocument", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -57,7 +57,11 @@ const Files = () => {
       await response.json();
       // Clear the file input after upload
       setFiles([]);
+      fetchFiles();
     } catch (error) {
+      alert(
+        "Error uploading file. Check the console for details."
+      );
       console.error("Error uploading files to Supabase:", error.message);
     } finally {
       setIsUploading(false);
@@ -93,14 +97,10 @@ const Files = () => {
         .from("fileshare-bucket")
         .remove([`uploads/${fileName}`]);
 
-      if (error) {
-        throw error;
-      }
-
       setUploadedFiles((prev) => prev.filter((file) => file.name !== fileName));
       // Delete from backend
       const response = await fetch(
-        `https://multer-3w57.onrender.com/deletedocument/${fileName}`,
+        `http://localhost:3001/deletedocument/${fileName}`,
         {
           method: "DELETE",
         }
@@ -109,30 +109,31 @@ const Files = () => {
         throw new Error("Failed to delete file from backend");
       }
       await response.json();
+      fetchFiles();
     } catch (error) {
       console.error("Error deleting file from Supabase:", error.message);
     }
   };
-
-  useEffect(() => {
-    const fetchFiles = async () => {
-      try {
-        const response = await fetch("https://multer-3w57.onrender.com/fetchdocuments");
-        if (!response.ok) {
-          throw new Error("Failed to fetch files");
-        }
-
-        const data = await response.json();
-        const fileList = data.documents.map((file) => ({
-          name: file.name,
-          type: file.type || "Unknown",
-          url: file.url,
-        }));
-        setUploadedFiles(fileList);
-      } catch (error) {
-        console.error("Error fetching files:", error);
+  const fetchFiles = async () => {
+    try {
+      const response = await fetch("http://localhost:3001/fetchdocuments");
+      if (!response.ok) {
+        throw new Error("Failed to fetch files");
       }
-    };
+
+      const data = await response.json();
+      const fileList = data.documents.map((file) => ({
+        name: file.name,
+        type: file.type || "Unknown",
+        url: file.url,
+        size: file.size,
+      }));
+      setUploadedFiles(fileList);
+    } catch (error) {
+      console.error("Error fetching files:", error);
+    }
+  };
+  useEffect(() => {    
     fetchFiles();
   }, []);
 
@@ -167,6 +168,7 @@ const Files = () => {
               <tr>
                 <th>Name</th>
                 <th>Type</th>
+                <th>Size</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -175,6 +177,7 @@ const Files = () => {
                 <tr key={index}>
                   <td>{file.name}</td>
                   <td>{file.type}</td>
+                  <td>{file.size} bytes</td>
                   <td>
                     <button
                       onClick={() => handleOpen(file)}

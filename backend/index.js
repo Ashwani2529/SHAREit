@@ -8,7 +8,7 @@ app.use(express.json({ limit: "25mb" }));
 
 app.use(
   cors({
-    origin: "https://shareit-lite.netlify.app",
+    origin: ["https://shareit-lite.netlify.app","http://localhost:3000"],
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
@@ -21,16 +21,20 @@ mongoose.connect(process.env.MONGO_URL, {
 
 const documentSchema = new mongoose.Schema({
   documentName: String,
-  documentPath: String,
   documentType: String,
-  documentContent: String,
+  documentSize: Number,
+  documentUrl:{type: String, required: true}, 
   uploadedAt: { type: Date, default: Date.now },
 });
 const Document = mongoose.model("Document", documentSchema);
 // DELETE API: Delete a document by ID
 app.delete("/deletedocument/:id", async (req, res) => {
   try {
+    if(!req.params.id){
+      return res.status(400).json({ error: "Document ID is required" });
+    }
     const document = await Document.findByIdAndDelete(req.params.id);
+    console.log("Document deleted:", document);
     if (!document) {
       return res.status(404).json({ error: "Document not found" });
     }
@@ -49,7 +53,8 @@ app.get("/fetchdocuments", async (req, res) => {
       id: doc._id,
       name: doc.documentName,
       type: doc.documentType,
-      url: doc.documentContent, // Include Base64 content
+      url: doc.documentUrl, 
+      size: doc.documentSize,
       uploadedAt: doc.uploadedAt,
     }));
     res.json({ documents: formattedDocuments });
@@ -61,20 +66,26 @@ app.get("/fetchdocuments", async (req, res) => {
 
 // POST API: Upload a document
 app.post("/uploaddocument", async (req, res) => {
-  const { documents } = req.body; // Expecting an array of documents
+  const { documents } = req.body; 
   try {
     const savedDocuments = await Promise.all(
       documents.map(async (doc) => {
+        if (!doc.url) {
+          throw new Error("Provide Document url");
+        }
         const newDocument = await Document.create({
           documentName: doc.name,
           documentType: doc.type,
-          documentContent: doc.url,
+          documentSize: doc.size,
+          documentUrl: doc.url,
         });
+        console.log("Document saved:", savedDocuments);
         return {
           id: newDocument._id,
           name: newDocument.documentName,
           type: newDocument.documentType,
-          url: newDocument.documentContent, // Include Base64 content
+          size: newDocument.documentSize,
+          url: newDocument.documentUrl, 
           uploadedAt: newDocument.uploadedAt,
         };
       })
