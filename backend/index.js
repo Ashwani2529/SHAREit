@@ -33,7 +33,7 @@ app.delete("/deletedocument/:id", async (req, res) => {
     if(!req.params.id){
       return res.status(400).json({ error: "Document ID is required" });
     }
-    const document = await Document.findByIdAndDelete(req.params.id);
+    const document = await Document.deleteOne({ documentName: (req.params.id).toString() });
     if (!document) {
       return res.status(404).json({ error: "Document not found" });
     }
