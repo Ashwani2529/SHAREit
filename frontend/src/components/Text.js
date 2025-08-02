@@ -7,11 +7,13 @@ const TextManager = () => {
   const [items, setItems] = useState([]);
   const [inputValue, setInputValue] = useState("");
   const [editIndex, setEditIndex] = useState(null);
-  const [showModal, setShowModal] = useState(false); // State to control modal visibility
-  const [modalInputValue, setModalInputValue] = useState(""); // State for modal input
+  const [showModal, setShowModal] = useState(false);
+  const [modalInputValue, setModalInputValue] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   // Fetch all text items from the backend
   const fetchItems = async () => {
+    setIsLoading(true);
     try {
       const response = await fetch("https://multer-3w57.onrender.com/texts", {
         method: "GET",
@@ -26,6 +28,8 @@ const TextManager = () => {
       setItems(data.texts || []);
     } catch (error) {
       console.error("Error fetching items:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -33,6 +37,7 @@ const TextManager = () => {
   const handleAddOrUpdate = React.useCallback(async () => {
     if (editIndex !== null) {
       // Update existing item
+      setIsLoading(true);
       try {
         const response = await fetch(
           `https://multer-3w57.onrender.com/texts/${editIndex}`,
@@ -51,13 +56,18 @@ const TextManager = () => {
         updatedItems[editIndex] = { ...updatedItems[editIndex], text: modalInputValue };
         setItems(updatedItems);
         setEditIndex(null);
-        setShowModal(false); // Close the modal after updating
+        setShowModal(false);
         fetchItems();
       } catch (error) {
         console.error("Error updating item:", error);
+      } finally {
+        setIsLoading(false);
       }
     } else {
       // Add new item
+      if (!inputValue.trim()) return;
+      
+      setIsLoading(true);
       try {
         const response = await fetch("https://multer-3w57.onrender.com/texts", {
           method: "POST",
@@ -74,6 +84,8 @@ const TextManager = () => {
         fetchItems();
       } catch (error) {
         console.error("Error adding item:", error);
+      } finally {
+        setIsLoading(false);
       }
     }
     setInputValue("");
@@ -81,6 +93,9 @@ const TextManager = () => {
 
   // Delete a text item
   const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this text?')) return;
+    
+    setIsLoading(true);
     try {
       const response = await fetch(`https://multer-3w57.onrender.com/texts/${id}`, {
         method: "DELETE",
@@ -91,24 +106,61 @@ const TextManager = () => {
       if (!response.ok) {
         throw new Error("Failed to delete item");
       }
-      setItems(items.filter((item) => item._id !== id)); // Filter out the deleted item
+      setItems(items.filter((item) => item._id !== id));
       fetchItems();
     } catch (error) {
       console.error("Error deleting item:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Copy text to clipboard
+  const handleCopy = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text || "");
+      // You could add a toast notification here
+    } catch (error) {
+      console.error("Failed to copy text:", error);
     }
   };
 
   // Open the modal for editing
-  const handleEdit = (id,index) => {
+  const handleEdit = (id, index) => {
     setEditIndex(id);
-    setModalInputValue(items[index].text); // Set the current text in the modal input
-    setShowModal(true); // Show the modal
+    setModalInputValue(items[index].text);
+    setShowModal(true);
   };
 
   // Close the modal
   const handleCloseModal = () => {
     setShowModal(false);
     setEditIndex(null);
+    setModalInputValue("");
+  };
+
+  // Check if text is a URL
+  const isURL = (text) => {
+    try {
+      new URL(text);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  // Truncate text for display
+  const truncateText = (text, maxLength = 120) => {
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
+  };
+
+  // Get preview of text content
+  const getTextPreview = (text) => {
+    if (isURL(text)) {
+      return { type: 'url', content: text, display: text };
+    }
+    return { type: 'text', content: text, display: truncateText(text) };
   };
 
   // Fetch items on component mount
@@ -119,79 +171,229 @@ const TextManager = () => {
   return (
     <>
       <Page />
-      <div style={{ padding: "20px", maxWidth: "600px", margin: "0 auto" }}>
-        <h2>Text Manager</h2>
-        <div style={{ marginBottom: "10px" }}>
-          <input
-            type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            placeholder="Enter text or link"
-            style={{ padding: "5px", width: "70%" }}
-          />
-          <button
-            onClick={handleAddOrUpdate}
-            style={{ padding: "5px 10px", marginLeft: "10px" }}
-          >
-            {editIndex !== null ? "Update" : "Add"}
-          </button>
-        </div>
-        <table border="1" style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th>Text/Link</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item, index) => (
-              <tr key={item?._id}>
-                <td>{item?.text || null}</td> 
-                <td>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(item?.text || "");
-                    }}
-                    style={{ marginRight: "5px" }}
-                  >
-                    Copy
-                  </button>
-                  <button
-                    onClick={() => handleEdit(item._id,index)} // Use _id for editing
-                    style={{ marginRight: "5px" }}
-                  >
-                    Edit
-                  </button>
-                  <button onClick={() => handleDelete(item._id)}>Delete</button>{" "}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <main className="main-content">
+        <div className="container">
+          {/* Add Text Form */}
+          <section className="mb-5">
+            <h2 className="mb-4">Text Manager</h2>
+            <div className="input-form">
+              <div className="input-group">
+                <label htmlFor="text-input" className="input-label">
+                  Add new text or link
+                </label>
+                <input
+                  id="text-input"
+                  type="text"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  placeholder="Enter text, URL, or any content you want to save..."
+                  className="form-control"
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      handleAddOrUpdate();
+                    }
+                  }}
+                />
+              </div>
+              <button
+                onClick={handleAddOrUpdate}
+                disabled={!inputValue.trim() || isLoading}
+                className={`btn btn-primary ${isLoading ? 'loading' : ''}`}
+              >
+                {isLoading ? (
+                  <>
+                    <span className="spinner"></span>
+                    Adding...
+                  </>
+                ) : (
+                  <>
+                    <i className="bx bx-plus"></i>
+                    Add Text
+                  </>
+                )}
+              </button>
+            </div>
+          </section>
 
-      {/* Modal for editing */}
-      <Modal show={showModal} onHide={handleCloseModal}>
-        <Modal.Header closeButton>
-          <Modal.Title>Edit Text</Modal.Title>
+          {/* Text Cards Grid */}
+          <section>
+            <h3 className="mb-4">Saved Texts ({items.length})</h3>
+            {items.length > 0 ? (
+              <div className="text-cards fade-in-up">
+                {items.map((item, index) => {
+                  const preview = getTextPreview(item?.text || '');
+                  return (
+                    <div key={item?._id} className="text-card card">
+                      <div className="text-content">
+                        {preview.type === 'url' ? (
+                          <a 
+                            href={preview.content} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-primary"
+                          >
+                            <i className="bx bx-link-external"></i>
+                            {preview.display}
+                          </a>
+                        ) : (
+                          <span>{preview.display}</span>
+                        )}
+                      </div>
+                      <div className="text-actions">
+                        <button
+                          onClick={() => handleCopy(item?.text)}
+                          className="btn btn-outline"
+                          title="Copy to clipboard"
+                        >
+                          <i className="bx bx-copy"></i>
+                          Copy
+                        </button>
+                        {preview.type === 'url' && (
+                          <button
+                            onClick={() => window.open(preview.content, '_blank')}
+                            className="btn btn-secondary"
+                            title="Open link"
+                          >
+                            <i className="bx bx-link-external"></i>
+                            Open
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleEdit(item._id, index)}
+                          className="btn btn-ghost"
+                          title="Edit text"
+                        >
+                          <i className="bx bx-edit"></i>
+                          Edit
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(item._id)}
+                          className="btn btn-danger"
+                          title="Delete text"
+                          disabled={isLoading}
+                        >
+                          <i className="bx bx-trash"></i>
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="empty-state">
+                <div className="empty-icon">
+                  <i className="bx bx-text"></i>
+                </div>
+                <h3 className="empty-title">No texts saved yet</h3>
+                <p className="empty-description">
+                  Start by adding your first text or link using the form above.
+                  You can save URLs, notes, code snippets, or any text content.
+                </p>
+              </div>
+            )}
+          </section>
+        </div>
+      </main>
+
+      {/* Edit Modal */}
+      <Modal 
+        show={showModal} 
+        onHide={handleCloseModal}
+        centered
+        className="custom-modal"
+      >
+        <Modal.Header closeButton className="modal-header-custom">
+          <Modal.Title>
+            <i className="bx bx-edit"></i>
+            Edit Text
+          </Modal.Title>
         </Modal.Header>
-        <Modal.Body>
-          <input
-            type="text"
-            value={modalInputValue}
-            onChange={(e) => setModalInputValue(e.target.value)}
-            style={{ width: "100%", padding: "5px" }}
-          />
+        <Modal.Body className="modal-body-custom">
+          <div className="input-group">
+            <label htmlFor="modal-text-input" className="input-label">
+              Text Content
+            </label>
+            <textarea
+              id="modal-text-input"
+              value={modalInputValue}
+              onChange={(e) => setModalInputValue(e.target.value)}
+              className="form-control"
+              rows="4"
+              placeholder="Enter your text content..."
+            />
+          </div>
         </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={handleCloseModal}>
-            Close
+        <Modal.Footer className="modal-footer-custom">
+          <Button 
+            variant="outline-secondary" 
+            onClick={handleCloseModal}
+            className="btn btn-outline"
+          >
+            <i className="bx bx-x"></i>
+            Cancel
           </Button>
-          <Button variant="primary" onClick={handleAddOrUpdate}>
-            Save Changes
+          <Button 
+            variant="primary" 
+            onClick={handleAddOrUpdate}
+            disabled={!modalInputValue.trim() || isLoading}
+            className={`btn btn-primary ${isLoading ? 'loading' : ''}`}
+          >
+            {isLoading ? (
+              <>
+                <span className="spinner"></span>
+                Saving...
+              </>
+            ) : (
+              <>
+                <i className="bx bx-check"></i>
+                Save Changes
+              </>
+            )}
           </Button>
         </Modal.Footer>
       </Modal>
+
+      {/* Modal Styles */}
+      <style jsx>{`
+        .custom-modal .modal-content {
+          background: var(--color-card);
+          border: 1px solid var(--color-border);
+          border-radius: var(--radius-lg);
+          box-shadow: var(--shadow-xl);
+        }
+
+        .modal-header-custom {
+          background: var(--color-surface);
+          border-bottom: 1px solid var(--color-border);
+          border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        }
+
+        .modal-header-custom .modal-title {
+          color: var(--color-text-primary);
+          display: flex;
+          align-items: center;
+          gap: var(--space-sm);
+        }
+
+        .modal-header-custom .btn-close {
+          filter: invert(1);
+        }
+
+        .modal-body-custom {
+          padding: var(--space-xl);
+        }
+
+        .modal-footer-custom {
+          background: var(--color-surface);
+          border-top: 1px solid var(--color-border);
+          border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+          padding: var(--space-lg) var(--space-xl);
+          display: flex;
+          gap: var(--space-md);
+          justify-content: flex-end;
+        }
+      `}</style>
     </>
   );
 };
