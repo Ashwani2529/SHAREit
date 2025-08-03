@@ -182,6 +182,7 @@ const TextManager = () => {
                   Add new text or link
                 </label>
                 <input
+                  style={{ width: '100%' }}
                   id="text-input"
                   type="text"
                   value={inputValue}

@@ -326,12 +326,14 @@
 /* ===== INPUT FORM ===== */
 .input-form {
   display: flex;
+  align-items: center;
+  justify-content: center;
   gap: var(--space-md);
   margin-bottom: var(--space-2xl);
-  align-items: flex-end;
 }
 
 .input-group {
+  display: block;
   flex: 1;
 }
 
@@ -345,8 +347,10 @@
 
 @media (max-width: 768px) {
   .input-form {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     flex-direction: column;
-    align-items: stretch;
   }
   
   .upload-actions {
