@@ -1,4 +1,4 @@
-# 🚀 SHAREit - Modern File & Text Sharing Platform
+# SHAREit - Modern File & Text Sharing Platform
 
 [![React](https://img.shields.io/badge/React-18.2.0-blue.svg)](https://reactjs.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-Express-green.svg)](https://nodejs.org/)
@@ -76,7 +76,7 @@ Experience the modern UI/UX improvements including dark theme, drag-and-drop upl
 
 1. **Clone the repository**
    ```bash
-   git clone <your-repo-url>
+   git clone https://github.com/Ashwani2529/SHAREit.git
    cd SHAREit
    ```
 
