@@ -63,6 +63,14 @@ const Page = () => {
                 Text
               </Link>
             </li>
+            <li>
+              <Link to ="/private" className={`nav-link ${isActive('/private') ? 'active' : ''}`}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                <i className="bx bx-lock"></i>
+                Private
+              </Link>
+            </li>
           </ul>
         </nav>
       </header>
@@ -84,6 +92,10 @@ const Page = () => {
               <Link to="/text" className="btn btn-outline">
                 <i className="bx bx-text"></i>
                 Manage Text
+              </Link>
+              <Link to="/private" className="btn btn-outline">
+                <i className="bx bx-lock"></i>
+                Private
               </Link>
             </div>
           </div>

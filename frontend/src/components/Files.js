@@ -1,11 +1,8 @@
 import React, { useEffect, useState, useCallback } from "react";
 import Page from "./Page";
-import { createClient } from "@supabase/supabase-js";
+import supabase from "./Storage";
 
 const Files = () => {
-  const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-  const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
-  const supabase = createClient(supabaseUrl, supabaseKey);
 
   const [files, setFiles] = useState([]);
   const [uploadedFiles, setUploadedFiles] = useState([]);

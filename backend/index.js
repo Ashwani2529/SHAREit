@@ -1,18 +1,70 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
+const session = require("express-session");
+const cookieParser = require("cookie-parser");
+require("dotenv").config();
+
 const app = express();
 const PORT = 3001;
-require("dotenv").config();
+
+// --- Core middleware
 app.use(express.json({ limit: "25mb" }));
+app.use(cookieParser());
 
 app.use(
   cors({
     origin: "https://shareit-lite.netlify.app",
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true, 
   })
 );
+
+const isProd = process.env.NODE_ENV === "production";
+if (isProd) app.set("trust proxy", 1); // if behind proxy in prod
+
+app.use(
+  session({
+    name: "sid",
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: isProd ? "lax" : "lax",
+      secure: isProd ? true : false,   
+      maxAge: 1000 * 60 * 60 * 8,
+    },
+  })
+);
+function requireAuth(req, res, next) {
+  if (!req.session?.user) return res.status(401).json({ error: "Unauthorized" });
+  next();
+}
+app.post("/api/login", (req, res) => {
+  const { password } = req.body;
+  const ok = password && password === process.env.PRIVATE_PASSWORD;
+  if (!ok) return res.status(401).json({ error: "Invalid credentials" });
+
+  req.session.user = { id: "ASH", canSeePrivate: true };
+  req.session.save((err) => {
+    if (err) return res.status(500).json({ error: "Session save failed" });
+    res.json({ ok: true });
+  });
+});
+
+app.post("/api/logout", (req, res) => {
+  req.session.destroy(() => {
+    res.clearCookie("sid");
+    res.json({ ok: true });
+  });
+});
+
+// --- Who am I? used by the client guard
+app.get("/api/me", (req, res) => {
+  res.json({ user: req.session?.user ?? null });
+});
 
 mongoose.connect(process.env.MONGO_URL, {
   useNewUrlParser: true,
@@ -23,10 +75,12 @@ const documentSchema = new mongoose.Schema({
   documentName: String,
   documentType: String,
   documentSize: Number,
+  isPrivate: { type: Boolean, default: false },
   documentUrl:{type: String, required: true}, 
   uploadedAt: { type: Date, default: Date.now },
 });
 const Document = mongoose.model("Document", documentSchema);
+
 // DELETE API: Delete a document by ID
 app.delete("/deletedocument/:id", async (req, res) => {
   try {
@@ -47,7 +101,7 @@ app.delete("/deletedocument/:id", async (req, res) => {
 // GET API: Fetch all documents
 app.get("/fetchdocuments", async (req, res) => {
   try {
-    const documents = await Document.find();
+    const documents = (await Document.find()).filter(doc => !doc.isPrivate);
     const formattedDocuments = documents.map((doc) => ({
       id: doc._id,
       name: doc.documentName,
@@ -63,9 +117,26 @@ app.get("/fetchdocuments", async (req, res) => {
   }
 });
 
+app.get("/fetchprivatedocuments", async (req, res) => {
+  try {
+    const documents = await Document.find({ isPrivate: true });
+    const formattedDocuments = documents.map((doc) => ({
+      id: doc._id,
+      name: doc.documentName,
+      type: doc.documentType,
+      url: doc.documentUrl, 
+      size: doc.documentSize,
+      uploadedAt: doc.uploadedAt,
+    }));
+    res.json({ documents: formattedDocuments });
+  } catch (error) {
+    console.error("Error fetching documents:", error.message);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 // POST API: Upload a document
 app.post("/uploaddocument", async (req, res) => {
-  const { documents } = req.body; 
+  const { documents, isPrivate } = req.body;
   try {
     const savedDocuments = await Promise.all(
       documents.map(async (doc) => {
@@ -76,6 +147,7 @@ app.post("/uploaddocument", async (req, res) => {
           documentName: doc.name,
           documentType: doc.type,
           documentSize: doc.size,
+          isPrivate: isPrivate || false,
           documentUrl: doc.url,
         });
         return {
@@ -85,6 +157,7 @@ app.post("/uploaddocument", async (req, res) => {
           size: newDocument.documentSize,
           url: newDocument.documentUrl, 
           uploadedAt: newDocument.uploadedAt,
+          isPrivate: newDocument.isPrivate,
         };
       })
     );
@@ -99,6 +172,7 @@ app.post("/uploaddocument", async (req, res) => {
 });
 const noteSchema = new mongoose.Schema({
   text: String,
+  isPrivate: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
 });
 
@@ -106,15 +180,16 @@ const Note = mongoose.model("Note", noteSchema);
 
 // POST API: Create a new note
 app.post("/texts", async (req, res) => {
-  const { text } = req.body;
+  const { text, isPrivate } = req.body;
 
   try {
-    const note = await Note.create({ text });
+    const note = await Note.create({ text, isPrivate });
     res.json({
       message: "Note created successfully",
       note: {
         id: note._id,
         text: note.text,
+        isPrivate: note.isPrivate,
         createdAt: note.createdAt,
       },
     });
@@ -127,7 +202,7 @@ app.post("/texts", async (req, res) => {
 // PUT API: Update an existing note
 
 app.put("/texts/:id", async (req, res) => {
-  const { text } = req.body;
+  const { text, isPrivate } = req.body;
   const { id } = req.params;
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -135,7 +210,7 @@ app.put("/texts/:id", async (req, res) => {
   }
 
   try {
-    const note = await Note.findByIdAndUpdate(id, { text }, { new: true });
+    const note = await Note.findByIdAndUpdate(id, { text, isPrivate }, { new: true });
     if (!note) {
       return res.status(404).json({ error: "Note not found" });
     }
@@ -145,6 +220,7 @@ app.put("/texts/:id", async (req, res) => {
         id: note._id,
         text: note.text,
         createdAt: note.createdAt,
+        isPrivate: note.isPrivate,
       },
     });
   } catch (error) {
@@ -156,7 +232,17 @@ app.put("/texts/:id", async (req, res) => {
 // GET API: Fetch all notes
 app.get("/texts", async (req, res) => {
   try {
-    const notes = await Note.find();
+    const notes = (await Note.find()).filter(note => !note.isPrivate);
+    res.json({ texts: notes });
+  } catch (error) {
+    console.error("Error fetching notes:", error.message);
+    res.status(500).json({ error: "Failed to fetch notes" });
+  }
+});
+
+app.get("/privatetexts", async (req, res) => {
+  try {
+    const notes = await Note.find({ isPrivate: true });
     res.json({ texts: notes });
   } catch (error) {
     console.error("Error fetching notes:", error.message);
