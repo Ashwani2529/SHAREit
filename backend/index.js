@@ -9,7 +9,6 @@ const PORT = 3001;
 
 // --- Core middleware
 app.use(express.json({ limit: "25mb" }));
-app.use(cookieParser());
 
 app.use(
   cors({
