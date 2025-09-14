@@ -1,4 +1,3 @@
-// Login.jsx
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -7,26 +6,27 @@ const Login = () => {
   const [err, setErr] = useState("");
   const navigate = useNavigate();
 
-  async function onSubmit(e) {
+  function onSubmit(e) {
     e.preventDefault();
     setErr("");
-    const res = await fetch("https://multer-3w57.onrender.com/api/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      
-      credentials: "include",
-      body: JSON.stringify({ password }),
-    });
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
-      setErr(j.error || "Login failed");
-      return;
-    }
-    navigate("/private");
+
+    // Option 1: store in memory (context or global variable)
+    // Option 2: store in localStorage for persistence
+    localStorage.setItem("privatePassword", password);
+
+    // Optionally, you can test it immediately by hitting a protected route
+    fetch("https://multer-3w57.onrender.com/api/checkpassword", {
+      headers: { "x-access-password": password }
+    })
+      .then(res => {
+        if (!res.ok) throw new Error("Invalid password");
+        navigate("/private");
+      })
+      .catch(() => setErr("Invalid password"));
   }
 
   return (
-    <form onSubmit={onSubmit} style={{marginTop: "10rem"}} className="card flex flex-col gap-1 align-center justify-center w-[30%] mx-auto p-4">
+    <form onSubmit={onSubmit} style={{ marginTop: "10rem" }} className="card flex flex-col gap-1 align-center justify-center w-[30%] mx-auto p-4">
       <h2>Enter Password</h2>
       <input
         type="password"
@@ -39,4 +39,5 @@ const Login = () => {
     </form>
   );
 };
+
 export default Login;

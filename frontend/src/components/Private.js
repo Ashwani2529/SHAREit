@@ -250,11 +250,37 @@ const handleDelete = async (idOrFileName, type) => {
     return { type: 'text', content: text, display: truncateText(text) };
   };
 
-  // Fetch items on component mount
-  useEffect(() => {
-    fetchItems();
-    fetchFiles();
-  }, []);
+ useEffect(() => {
+  const password = localStorage.getItem("privatePassword");
+  if (!password) {
+    setError("No password found. Please log in.");
+    return;
+  }
+
+  // First, check password with backend
+  fetch("https://multer-3w57.onrender.com/api/checkpassword", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password })
+  })
+    .then(res => {
+      if (!res.ok) throw new Error("Invalid password");
+      return res.json();
+    })
+    .then(data => {
+      if (data.ok) {
+        // Password is correct → fetch protected data
+        fetchItems();
+        fetchFiles();
+      } else {
+        throw new Error("Invalid password");
+      }
+    })
+    .catch(err => {
+      setError(err.message);
+    });
+}, []);
+
 
   const handleFileChange = (e) => {
     setFiles(e.target.files);

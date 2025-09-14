@@ -21,9 +21,7 @@ const App = () => {
           <Route
             path="/private"
             element={
-              <RequireAuth>
-                <Private />
-              </RequireAuth>
+              <Private />
             }
           />
           <Route path="/login" element={<Login />} />

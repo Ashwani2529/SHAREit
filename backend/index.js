@@ -1,10 +1,6 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const session = require("express-session");
-const cookieParser = require("cookie-parser");
-const crypto = require("crypto");
-const MongoStore = require("connect-mongo");  
 require("dotenv").config();
 
 
@@ -23,67 +19,16 @@ app.use(
   })
 );
 
-const isProd = process.env.NODE_ENV === "production";
-if (isProd) app.set("trust proxy", 1);
+function passwordAuth(req, res, next) {
+  const providedPassword =
+    req.headers["x-access-password"] || req.body?.password;
 
-app.use(session({
-  name: "sid",
-  secret: process.env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: false,
-  store: MongoStore.create({
-    mongoUrl: process.env.MONGO_URL,
-    collectionName: "sessions",
-    ttl: 60 * 60 * 8 // 8 hours
-  }),
-  cookie: {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-    maxAge: 1000 * 60 * 60 * 8
+  if (providedPassword && providedPassword === process.env.PRIVATE_PASSWORD) {
+    return next();
   }
-}));
-function authRequired(req, res, next) {
-  if (req.session?.authenticated) {
-    return next(); 
-  }
+
   res.status(401).json({ error: "Unauthorized" });
 }
-app.post("/api/login", async (req, res) => {
-  const { password } = req.body;
-  if (password !== process.env.PRIVATE_PASSWORD) {
-    return res.status(401).json({ error: "Invalid credentials" });
-  }
-
-  // Always use the same session ID for this single-user app
-  const fixedSid = "single-user-session";
-
-  // Destroy any existing session with that ID
-  req.sessionStore.destroy(fixedSid);
-
-  // Manually set the session ID
-  req.sessionID = fixedSid;
-  req.session.id = fixedSid;
-
-  req.session.authenticated = true;
-  req.session.issuedAt = Date.now();
-  req.session.refreshToken = crypto.randomBytes(64).toString("hex");
-
-  req.session.save(err => {
-    if (err) {
-      return res.status(500).json({ error: "Session save failed" });
-    }
-    res.json({ ok: true });
-  });
-});
-
-// --- Who am I? boolean only
-app.get("/api/me", (req, res) => {
-  if (req.session?.authenticated) {
-    return res.json({ user: true });
-  }
-  res.json({ user: false });
-});
 
 mongoose.connect(process.env.MONGO_URL, {
   useNewUrlParser: true,
@@ -136,7 +81,16 @@ app.get("/fetchdocuments", async (req, res) => {
   }
 });
 
-app.get("/fetchprivatedocuments", authRequired,async (req, res) => {
+//get api to check password
+app.get("/checkpassword", async (req, res) => {
+  const providedPassword = req.headers["x-access-password"];
+  if (providedPassword && providedPassword === process.env.PRIVATE_PASSWORD) {
+    return res.json({ valid: true });
+  }
+  res.status(401).json({ valid: false });
+});
+
+app.get("/fetchprivatedocuments", passwordAuth,async (req, res) => {
   try {
     const documents = await Document.find({ isPrivate: true });
     const formattedDocuments = documents.map((doc) => ({
@@ -259,7 +213,7 @@ app.get("/texts", async (req, res) => {
   }
 });
 
-app.get("/privatetexts", authRequired,async (req, res) => {
+app.get("/privatetexts", passwordAuth,async (req, res) => {
   try {
     const notes = await Note.find({ isPrivate: true });
     res.json({ texts: notes });
