@@ -56,19 +56,38 @@ app.post("/api/login", async (req, res) => {
     return res.status(401).json({ error: "Invalid credentials" });
   }
 
-  req.session.authenticated = true;
-  req.session.issuedAt = Date.now();
+  try {
+    // 1. Destroy all existing sessions in MongoDB
+     req.sessionStore.clear(); 
+    // This removes all docs from the "sessions" collection
 
-  // Optional: store refresh token in session
-  req.session.refreshToken = crypto.randomBytes(64).toString("hex");
+    // 2. Regenerate session to get a fresh session ID
+    req.session.regenerate(err => {
+      if (err) {
+        console.error("Session regenerate error:", err);
+        return res.status(500).json({ error: "Session regenerate failed" });
+      }
 
-  req.session.save(err => {
-    if (err) {
-      return res.status(500).json({ error: "Session save failed" });
-    }
-    res.json({ ok: true });
-  });
+      // 3. Set auth data
+      req.session.authenticated = true;
+      req.session.issuedAt = Date.now();
+      req.session.refreshToken = crypto.randomBytes(64).toString("hex");
+
+      // 4. Save session
+      req.session.save(err2 => {
+        if (err2) {
+          console.error("Session save error:", err2);
+          return res.status(500).json({ error: "Session save failed" });
+        }
+        res.json({ ok: true });
+      });
+    });
+  } catch (error) {
+    console.error("Login error:", error);
+    res.status(500).json({ error: "Server error" });
+  }
 });
+
 
 // --- Who am I? boolean only
 app.get("/api/me", (req, res) => {
