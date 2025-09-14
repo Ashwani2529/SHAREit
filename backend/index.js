@@ -21,7 +21,7 @@ app.use(
 );
 
 const isProd = process.env.NODE_ENV === "production";
-if (isProd) app.set("trust proxy", 1); 
+if (isProd) app.set("trust proxy", 1);
 
 app.use(
   session({
@@ -29,22 +29,33 @@ app.use(
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    proxy: isProd, 
+    proxy: isProd,
     cookie: {
       httpOnly: true,
-      secure: isProd,  
-      sameSite: "none",
+      secure: isProd, 
+      sameSite: isProd ? "none" : "lax",
       maxAge: 1000 * 60 * 60 * 8,
     }
   })
 );
+
 app.post("/api/login", (req, res) => {
   const { password } = req.body;
   const ok = password && password === process.env.PRIVATE_PASSWORD;
   if (!ok) return res.status(401).json({ error: "Invalid credentials" });
-  req.session.save((err) => {
-    if (err) return res.status(500).json({ error: "Session save failed" });
-    res.json({ ok: true });
+
+  // Prevent session fixation and ensure it gets saved to the store
+  req.session.regenerate(err => {
+    if (err) return res.status(500).json({ error: "Session regen failed" });
+
+    // Put *something* on the session so it is non-empty and persists
+    req.session.authenticated = true;
+    req.session.issuedAt = Date.now();
+
+    req.session.save(err2 => {
+      if (err2) return res.status(500).json({ error: "Session save failed" });
+      res.json({ ok: true });
+    });
   });
 });
 
@@ -55,13 +66,40 @@ app.post("/api/logout", (req, res) => {
   });
 });
 
-// --- Who am I? used by the client guard
-app.get("/api/me", (req, res) => {
-  user = {id: "ASH", canSeePrivate: true},
-  //check if session exists if yes, send user info else send null
-  res.json({ user: req.session ? user : null });
-});
 
+// --- Who am I? boolean only
+app.get("/api/me", (req, res) => {
+  // Fast path: if session object exists and we set our flag earlier, it's true.
+  // (This works when the store entry is loaded and not stale.)
+  if (req.session && req.session.authenticated) {
+    return res.json({ user: true });
+  }
+
+  // Slow path: explicitly check the store to detect stale cookies.
+  const sid = req.sessionID;
+  if (!sid) return res.json({ user: false });
+
+  req.sessionStore.get(sid, (err, sess) => {
+    if (err) {
+      // On store error, treat as unauthenticated
+      return res.json({ user: false });
+    }
+
+    if (!sess || !sess.authenticated) {
+      // Stale cookie: clear it so the client stops sending a dead SID
+      const isProd = process.env.NODE_ENV === "production";
+      res.clearCookie("sid", {
+        httpOnly: true,
+        secure: isProd,
+        sameSite: isProd ? "none" : "lax",
+        path: "/",
+      });
+      return res.json({ user: false });
+    }
+
+    res.json({ user: true });
+  });
+});
 mongoose.connect(process.env.MONGO_URL, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
