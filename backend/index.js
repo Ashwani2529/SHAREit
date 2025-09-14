@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const session = require("express-session");
 const cookieParser = require("cookie-parser");
+const crypto = require("crypto");
 const MongoStore = require("connect-mongo");  
 require("dotenv").config();
 
@@ -25,25 +26,23 @@ app.use(
 const isProd = process.env.NODE_ENV === "production";
 if (isProd) app.set("trust proxy", 1);
 
-app.use(
-  session({
-    name: "sid",
-    secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    store: MongoStore.create({
-      mongoUrl: process.env.MONGO_URL,
-      collectionName: "sessions",
-      ttl: 60 * 60 * 8,
-    }),
-    cookie: {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: isProd ? "none" : "lax",
-      maxAge: 1000 * 60 * 60 * 8, 
-    },
-  })
-);
+app.use(session({
+  name: "sid",
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  store: MongoStore.create({
+    mongoUrl: process.env.MONGO_URL,
+    collectionName: "sessions",
+    ttl: 60 * 60 * 8 // 8 hours
+  }),
+  cookie: {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    maxAge: 1000 * 60 * 60 * 8
+  }
+}));
 
 app.post("/api/login", async (req, res) => {
   const { password } = req.body;
@@ -55,10 +54,14 @@ app.post("/api/login", async (req, res) => {
   req.session.issuedAt = Date.now();
 
   // Optional: store refresh token in session
-  req.session.refreshToken = crypto.randomBytes(40).toString("hex");
+  req.session.refreshToken = crypto.randomBytes(64).toString("hex");
 
-  await req.session.save();
-  res.json({ ok: true });
+  req.session.save(err => {
+    if (err) {
+      return res.status(500).json({ error: "Session save failed" });
+    }
+    res.json({ ok: true });
+  });
 });
 
 // --- Who am I? boolean only
