@@ -3,7 +3,9 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const session = require("express-session");
 const cookieParser = require("cookie-parser");
+const MongoStore = require("connect-mongo");  
 require("dotenv").config();
+
 
 const app = express();
 const PORT = 3001;
@@ -29,77 +31,44 @@ app.use(
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    proxy: isProd,
+    store: MongoStore.create({
+      mongoUrl: process.env.MONGO_URL,
+      collectionName: "sessions",
+      ttl: 60 * 60 * 8,
+    }),
     cookie: {
       httpOnly: true,
-      secure: isProd, 
+      secure: isProd,
       sameSite: isProd ? "none" : "lax",
-      maxAge: 1000 * 60 * 60 * 8,
-    }
+      maxAge: 1000 * 60 * 60 * 8, 
+    },
   })
 );
 
-app.post("/api/login", (req, res) => {
+app.post("/api/login", async (req, res) => {
   const { password } = req.body;
-  const ok = password && password === process.env.PRIVATE_PASSWORD;
-  if (!ok) return res.status(401).json({ error: "Invalid credentials" });
+  if (password !== process.env.PRIVATE_PASSWORD) {
+    return res.status(401).json({ error: "Invalid credentials" });
+  }
 
-  // Prevent session fixation and ensure it gets saved to the store
-  req.session.regenerate(err => {
-    if (err) return res.status(500).json({ error: "Session regen failed" });
+  req.session.authenticated = true;
+  req.session.issuedAt = Date.now();
 
-    // Put *something* on the session so it is non-empty and persists
-    req.session.authenticated = true;
-    req.session.issuedAt = Date.now();
+  // Optional: store refresh token in session
+  req.session.refreshToken = crypto.randomBytes(40).toString("hex");
 
-    req.session.save(err2 => {
-      if (err2) return res.status(500).json({ error: "Session save failed" });
-      res.json({ ok: true });
-    });
-  });
+  await req.session.save();
+  res.json({ ok: true });
 });
-
-app.post("/api/logout", (req, res) => {
-  req.session.destroy(() => {
-    res.clearCookie("sid");
-    res.json({ ok: true });
-  });
-});
-
 
 // --- Who am I? boolean only
 app.get("/api/me", (req, res) => {
-  // Fast path: if session object exists and we set our flag earlier, it's true.
-  // (This works when the store entry is loaded and not stale.)
-  if (req.session && req.session.authenticated) {
+  if (req.session?.authenticated) {
     return res.json({ user: true });
   }
-
-  // Slow path: explicitly check the store to detect stale cookies.
-  const sid = req.sessionID;
-  if (!sid) return res.json({ user: false });
-
-  req.sessionStore.get(sid, (err, sess) => {
-    if (err) {
-      // On store error, treat as unauthenticated
-      return res.json({ user: false });
-    }
-
-    if (!sess || !sess.authenticated) {
-      // Stale cookie: clear it so the client stops sending a dead SID
-      const isProd = process.env.NODE_ENV === "production";
-      res.clearCookie("sid", {
-        httpOnly: true,
-        secure: isProd,
-        sameSite: isProd ? "none" : "lax",
-        path: "/",
-      });
-      return res.json({ user: false });
-    }
-
-    res.json({ user: true });
-  });
+  res.json({ user: false });
 });
+
 mongoose.connect(process.env.MONGO_URL, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
