@@ -43,6 +43,12 @@ app.use(session({
     maxAge: 1000 * 60 * 60 * 8
   }
 }));
+function authRequired(req, res, next) {
+  if (req.session?.authenticated) {
+    return next(); 
+  }
+  res.status(401).json({ error: "Unauthorized" });
+}
 
 app.post("/api/login", async (req, res) => {
   const { password } = req.body;
@@ -123,7 +129,7 @@ app.get("/fetchdocuments", async (req, res) => {
   }
 });
 
-app.get("/fetchprivatedocuments", async (req, res) => {
+app.get("/fetchprivatedocuments", authRequired,async (req, res) => {
   try {
     const documents = await Document.find({ isPrivate: true });
     const formattedDocuments = documents.map((doc) => ({
@@ -246,7 +252,7 @@ app.get("/texts", async (req, res) => {
   }
 });
 
-app.get("/privatetexts", async (req, res) => {
+app.get("/privatetexts", authRequired,async (req, res) => {
   try {
     const notes = await Note.find({ isPrivate: true });
     res.json({ texts: notes });
