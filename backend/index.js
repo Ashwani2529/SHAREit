@@ -14,15 +14,14 @@ app.use(cookieParser());
 
 app.use(
   cors({
-    origin: "https://shareit-lite.netlify.app",
+    origin: ["https://shareit-lite.netlify.app", "http://localhost:3000"],
     methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true, 
   })
 );
 
 const isProd = process.env.NODE_ENV === "production";
-if (isProd) app.set("trust proxy", 1); // if behind proxy in prod
+if (isProd) app.set("trust proxy", 1); 
 
 app.use(
   session({
@@ -30,24 +29,19 @@ app.use(
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
+    proxy: isProd, 
     cookie: {
       httpOnly: true,
-      sameSite: isProd ? "lax" : "lax",
-      secure: isProd ? true : false,   
+      secure: isProd,  
+      sameSite: "none",
       maxAge: 1000 * 60 * 60 * 8,
-    },
+    }
   })
 );
-function requireAuth(req, res, next) {
-  if (!req.session?.user) return res.status(401).json({ error: "Unauthorized" });
-  next();
-}
 app.post("/api/login", (req, res) => {
   const { password } = req.body;
   const ok = password && password === process.env.PRIVATE_PASSWORD;
   if (!ok) return res.status(401).json({ error: "Invalid credentials" });
-
-  req.session.user = { id: "ASH", canSeePrivate: true };
   req.session.save((err) => {
     if (err) return res.status(500).json({ error: "Session save failed" });
     res.json({ ok: true });
@@ -63,7 +57,9 @@ app.post("/api/logout", (req, res) => {
 
 // --- Who am I? used by the client guard
 app.get("/api/me", (req, res) => {
-  res.json({ user: req.session?.user ?? null });
+  user = {id: "ASH", canSeePrivate: true},
+  //check if session exists if yes, send user info else send null
+  res.json({ user: req.session ? user : null });
 });
 
 mongoose.connect(process.env.MONGO_URL, {

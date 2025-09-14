@@ -13,6 +13,7 @@ const Login = () => {
     const res = await fetch("https://multer-3w57.onrender.com/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      
       credentials: "include",
       body: JSON.stringify({ password }),
     });
