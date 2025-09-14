@@ -49,45 +49,33 @@ function authRequired(req, res, next) {
   }
   res.status(401).json({ error: "Unauthorized" });
 }
-
 app.post("/api/login", async (req, res) => {
   const { password } = req.body;
   if (password !== process.env.PRIVATE_PASSWORD) {
     return res.status(401).json({ error: "Invalid credentials" });
   }
 
-  try {
-    // 1. Destroy all existing sessions in MongoDB
-     req.sessionStore.clear(); 
-    // This removes all docs from the "sessions" collection
+  // Always use the same session ID for this single-user app
+  const fixedSid = "single-user-session";
 
-    // 2. Regenerate session to get a fresh session ID
-    req.session.regenerate(err => {
-      if (err) {
-        console.error("Session regenerate error:", err);
-        return res.status(500).json({ error: "Session regenerate failed" });
-      }
+  // Destroy any existing session with that ID
+  req.sessionStore.destroy(fixedSid);
 
-      // 3. Set auth data
-      req.session.authenticated = true;
-      req.session.issuedAt = Date.now();
-      req.session.refreshToken = crypto.randomBytes(64).toString("hex");
+  // Manually set the session ID
+  req.sessionID = fixedSid;
+  req.session.id = fixedSid;
 
-      // 4. Save session
-      req.session.save(err2 => {
-        if (err2) {
-          console.error("Session save error:", err2);
-          return res.status(500).json({ error: "Session save failed" });
-        }
-        res.json({ ok: true });
-      });
-    });
-  } catch (error) {
-    console.error("Login error:", error);
-    res.status(500).json({ error: "Server error" });
-  }
+  req.session.authenticated = true;
+  req.session.issuedAt = Date.now();
+  req.session.refreshToken = crypto.randomBytes(64).toString("hex");
+
+  req.session.save(err => {
+    if (err) {
+      return res.status(500).json({ error: "Session save failed" });
+    }
+    res.json({ ok: true });
+  });
 });
-
 
 // --- Who am I? boolean only
 app.get("/api/me", (req, res) => {
