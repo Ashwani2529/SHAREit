@@ -6,16 +6,16 @@ const Login = () => {
   const [err, setErr] = useState("");
   const navigate = useNavigate();
 
-  function onSubmit(e) {
+  async function onSubmit(e) {
     e.preventDefault();
     setErr("");
 
     // Option 1: store in memory (context or global variable)
     // Option 2: store in localStorage for persistence
     localStorage.setItem("privatePassword", password);
-
     // Optionally, you can test it immediately by hitting a protected route
-    fetch("https://multer-3w57.onrender.com/api/checkpassword", {
+    await fetch("https://multer-3w57.onrender.com/checkpassword", {
+      method: "GET",
       headers: { "x-access-password": password }
     })
       .then(res => {

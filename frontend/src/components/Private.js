@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import Page from "./Page";
 import Button from "react-bootstrap/Button";
 import Modal from "react-bootstrap/Modal";
@@ -13,9 +14,11 @@ const Private = () => {
     const [items, setItems] = useState([]);
     const [inputValue, setInputValue] = useState("");
     const [editIndex, setEditIndex] = useState(null);
+    const [error, setError] = useState("");
     const [showModal, setShowModal] = useState(false);
     const [modalInputValue, setModalInputValue] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const navigate = useNavigate();
  // Fetch all text items from the backend
   const fetchItems = async () => {
     setIsLoading(true);
@@ -24,6 +27,7 @@ const Private = () => {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
+          "x-access-password": localStorage.getItem("privatePassword") || ""
         },
       });
       if (!response.ok) {
@@ -249,38 +253,44 @@ const handleDelete = async (idOrFileName, type) => {
     }
     return { type: 'text', content: text, display: truncateText(text) };
   };
-
- useEffect(() => {
+useEffect(() => {
   const password = localStorage.getItem("privatePassword");
   if (!password) {
     setError("No password found. Please log in.");
+    navigate("/login");
     return;
   }
 
-  // First, check password with backend
-  fetch("https://multer-3w57.onrender.com/api/checkpassword", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ password })
-  })
-    .then(res => {
-      if (!res.ok) throw new Error("Invalid password");
-      return res.json();
-    })
-    .then(data => {
-      if (data.ok) {
-        // Password is correct → fetch protected data
+  async function checkPasswordAndFetch() {
+    try {
+      const res = await fetch("https://multer-3w57.onrender.com/checkpassword", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "x-access-password": password
+        }
+      });
+
+      if (!res.ok) {
+        navigate("/login");
+        throw new Error("Invalid password");
+      }
+
+      const data = await res.json();
+      if (data.valid) {
         fetchItems();
         fetchFiles();
       } else {
         throw new Error("Invalid password");
       }
-    })
-    .catch(err => {
+    } catch (err) {
       setError(err.message);
-    });
-}, []);
+    }
+  }
 
+  checkPasswordAndFetch();
+  // eslint-disable-next-line
+}, []);
 
   const handleFileChange = (e) => {
     setFiles(e.target.files);
@@ -346,7 +356,12 @@ const handleDelete = async (idOrFileName, type) => {
   };
   const fetchFiles = async () => {
     try {
-      const response = await fetch("https://multer-3w57.onrender.com/fetchprivatedocuments");
+      const response = await fetch("https://multer-3w57.onrender.com/fetchprivatedocuments", {
+        method: "GET",
+        headers: {
+          "x-access-password": localStorage.getItem("privatePassword") || ""
+        }
+      });
       if (!response.ok) {
         throw new Error("Failed to fetch files");
       }
@@ -363,7 +378,7 @@ const handleDelete = async (idOrFileName, type) => {
       console.error("Error fetching files:", error);
     }
   };
-
+if (error) return <div>{error}</div>;
   return (
     <>
   <Page />

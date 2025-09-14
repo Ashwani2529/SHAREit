@@ -5,7 +5,6 @@ import Files from "./components/Files";
 import Private from "./components/Private";
 import Text from "./components/Text";
 import Login from "./components/Login";
-import RequireAuth from "./components/RequireAuth";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Page from "./components/Page";
 
