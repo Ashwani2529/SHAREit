@@ -9,14 +9,13 @@ const Login = () => {
   async function onSubmit(e) {
     e.preventDefault();
     setErr("");
-
-    // Option 1: store in memory (context or global variable)
-    // Option 2: store in localStorage for persistence
-    localStorage.setItem("privatePassword", password);
+    //encrypt password before storing it in localStorage for better security
+    const encryptedPassword = btoa(password);
+    localStorage.setItem("privatePassword", encryptedPassword);
     // Optionally, you can test it immediately by hitting a protected route
     await fetch("https://multer-3w57.onrender.com/checkpassword", {
       method: "GET",
-      headers: { "x-access-password": password }
+      headers: { "x-access-password": encryptedPassword }
     })
       .then(res => {
         if (!res.ok) throw new Error("Invalid password");

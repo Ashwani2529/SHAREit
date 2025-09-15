@@ -21,8 +21,10 @@ app.use(
 function passwordAuth(req, res, next) {
   const providedPassword =
     req.headers["x-access-password"] || req.body?.password;
+    //decrypt the password  which was encrypted using btoa in frontend
+    const decryptedPassword = providedPassword ? atob(providedPassword) : null;
 
-  if (providedPassword && providedPassword === process.env.PRIVATE_PASSWORD) {
+  if (decryptedPassword && decryptedPassword === process.env.PRIVATE_PASSWORD) {
     return next();
   }
 
@@ -83,7 +85,9 @@ app.get("/fetchdocuments", async (req, res) => {
 //get api to check password
 app.get("/checkpassword", async (req, res) => {
   const providedPassword = req.headers["x-access-password"];
-  if (providedPassword && providedPassword === process.env.PRIVATE_PASSWORD) {
+  const decryptedPassword = providedPassword ? atob(providedPassword) : null;
+
+  if (decryptedPassword && decryptedPassword === process.env.PRIVATE_PASSWORD) {
     return res.json({ valid: true });
   }
   res.status(401).json({ valid: false });
