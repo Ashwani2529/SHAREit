@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
+import { toast } from "react-toastify";
 import Page from "./Page";
-import Button from "react-bootstrap/Button";
-import Modal from "react-bootstrap/Modal";
+import AppModal from "./AppModal";
+import { TopProgressBar, SkeletonCards } from "./Loader";
 
 const TextManager = () => {
   const [items, setItems] = useState([]);
@@ -10,10 +11,11 @@ const TextManager = () => {
   const [showModal, setShowModal] = useState(false);
   const [modalInputValue, setModalInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetching, setIsFetching] = useState(true);
 
   // Fetch all text items from the backend
   const fetchItems = async () => {
-    setIsLoading(true);
+    setIsFetching(true);
     try {
       const response = await fetch("https://multer-3w57.onrender.com/texts", {
         method: "GET",
@@ -28,8 +30,9 @@ const TextManager = () => {
       setItems(data.texts || []);
     } catch (error) {
       console.error("Error fetching items:", error);
+      toast.error("Couldn't load your texts. Please try again.");
     } finally {
-      setIsLoading(false);
+      setIsFetching(false);
     }
   };
 
@@ -57,16 +60,18 @@ const TextManager = () => {
         setItems(updatedItems);
         setEditIndex(null);
         setShowModal(false);
+        toast.success("Text updated");
         fetchItems();
       } catch (error) {
         console.error("Error updating item:", error);
+        toast.error("Failed to update text.");
       } finally {
         setIsLoading(false);
       }
     } else {
       // Add new item
       if (!inputValue.trim()) return;
-      
+
       setIsLoading(true);
       try {
         const response = await fetch("https://multer-3w57.onrender.com/texts", {
@@ -81,9 +86,11 @@ const TextManager = () => {
         }
         const data = await response.json();
         setItems([...items, data.text]);
+        toast.success("Text added");
         fetchItems();
       } catch (error) {
         console.error("Error adding item:", error);
+        toast.error("Failed to add text.");
       } finally {
         setIsLoading(false);
       }
@@ -94,7 +101,7 @@ const TextManager = () => {
   // Delete a text item
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this text?')) return;
-    
+
     setIsLoading(true);
     try {
       const response = await fetch(`https://multer-3w57.onrender.com/texts/${id}`, {
@@ -107,9 +114,11 @@ const TextManager = () => {
         throw new Error("Failed to delete item");
       }
       setItems(items.filter((item) => item._id !== id));
+      toast.success("Text deleted");
       fetchItems();
     } catch (error) {
       console.error("Error deleting item:", error);
+      toast.error("Failed to delete text.");
     } finally {
       setIsLoading(false);
     }
@@ -119,9 +128,10 @@ const TextManager = () => {
   const handleCopy = async (text) => {
     try {
       await navigator.clipboard.writeText(text || "");
-      // You could add a toast notification here
+      toast.success("Copied to clipboard");
     } catch (error) {
       console.error("Failed to copy text:", error);
+      toast.error("Couldn't copy to clipboard.");
     }
   };
 
@@ -170,6 +180,7 @@ const TextManager = () => {
 
   return (
     <>
+      <TopProgressBar active={isFetching || isLoading} />
       <Page />
       <main className="main-content">
         <div className="container">
@@ -219,7 +230,9 @@ const TextManager = () => {
           {/* Text Cards Grid */}
           <section>
             <h3 className="mb-4">Saved Texts ({items.length})</h3>
-            {items.length > 0 ? (
+            {isFetching && items.length === 0 ? (
+              <SkeletonCards count={6} />
+            ) : items.length > 0 ? (
               <div className="text-cards fade-in-up">
                 {items.map((item, index) => {
                   const preview = getTextPreview(item?.text || '');
@@ -227,9 +240,9 @@ const TextManager = () => {
                     <div key={item?._id} className="text-card card">
                       <div className="text-content">
                         {preview.type === 'url' ? (
-                          <a 
-                            href={preview.content} 
-                            target="_blank" 
+                          <a
+                            href={preview.content}
+                            target="_blank"
                             rel="noopener noreferrer"
                             className="text-primary"
                           >
@@ -267,7 +280,7 @@ const TextManager = () => {
                           <i className="bx bx-edit"></i>
                           Edit
                         </button>
-                        <button 
+                        <button
                           onClick={() => handleDelete(item._id)}
                           className="btn btn-danger"
                           title="Delete text"
@@ -298,103 +311,55 @@ const TextManager = () => {
       </main>
 
       {/* Edit Modal */}
-      <Modal 
-        show={showModal} 
-        onHide={handleCloseModal}
-        centered
-        className="custom-modal"
+      <AppModal
+        show={showModal}
+        onClose={handleCloseModal}
+        title="Edit Text"
+        icon={<i className="bx bx-edit"></i>}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={handleCloseModal}
+              className="btn btn-outline"
+            >
+              <i className="bx bx-x"></i>
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleAddOrUpdate}
+              disabled={!modalInputValue.trim() || isLoading}
+              className={`btn btn-primary ${isLoading ? 'loading' : ''}`}
+            >
+              {isLoading ? (
+                <>
+                  <span className="spinner"></span>
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <i className="bx bx-check"></i>
+                  Save Changes
+                </>
+              )}
+            </button>
+          </>
+        }
       >
-        <Modal.Header closeButton className="modal-header-custom">
-          <Modal.Title>
-            <i className="bx bx-edit"></i>
-            Edit Text
-          </Modal.Title>
-        </Modal.Header>
-        <Modal.Body className="modal-body-custom">
-          <div className="input-group">
-            <label htmlFor="modal-text-input" className="input-label">
-              Text Content
-            </label>
-            <textarea
-              id="modal-text-input"
-              value={modalInputValue}
-              onChange={(e) => setModalInputValue(e.target.value)}
-              className="form-control"
-              rows="4"
-              placeholder="Enter your text content..."
-            />
-          </div>
-        </Modal.Body>
-        <Modal.Footer className="modal-footer-custom">
-          <Button 
-            variant="outline-secondary" 
-            onClick={handleCloseModal}
-            className="btn btn-outline"
-          >
-            <i className="bx bx-x"></i>
-            Cancel
-          </Button>
-          <Button 
-            variant="primary" 
-            onClick={handleAddOrUpdate}
-            disabled={!modalInputValue.trim() || isLoading}
-            className={`btn btn-primary ${isLoading ? 'loading' : ''}`}
-          >
-            {isLoading ? (
-              <>
-                <span className="spinner"></span>
-                Saving...
-              </>
-            ) : (
-              <>
-                <i className="bx bx-check"></i>
-                Save Changes
-              </>
-            )}
-          </Button>
-        </Modal.Footer>
-      </Modal>
-
-      {/* Modal Styles */}
-      <style jsx>{`
-        .custom-modal .modal-content {
-          background: var(--color-card);
-          border: 1px solid var(--color-border);
-          border-radius: var(--radius-lg);
-          box-shadow: var(--shadow-xl);
-        }
-
-        .modal-header-custom {
-          background: var(--color-surface);
-          border-bottom: 1px solid var(--color-border);
-          border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-        }
-
-        .modal-header-custom .modal-title {
-          color: var(--color-text-primary);
-          display: flex;
-          align-items: center;
-          gap: var(--space-sm);
-        }
-
-        .modal-header-custom .btn-close {
-          filter: invert(1);
-        }
-
-        .modal-body-custom {
-          padding: var(--space-xl);
-        }
-
-        .modal-footer-custom {
-          background: var(--color-surface);
-          border-top: 1px solid var(--color-border);
-          border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-          padding: var(--space-lg) var(--space-xl);
-          display: flex;
-          gap: var(--space-md);
-          justify-content: flex-end;
-        }
-      `}</style>
+        <div className="input-group">
+          <label htmlFor="modal-text-input" className="input-label">
+            Text Content
+          </label>
+          <textarea
+            id="modal-text-input"
+            value={modalInputValue}
+            onChange={(e) => setModalInputValue(e.target.value)}
+            className="form-control"
+            placeholder="Enter your text content..."
+          />
+        </div>
+      </AppModal>
     </>
   );
 };

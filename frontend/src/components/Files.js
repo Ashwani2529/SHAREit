@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useCallback } from "react";
+import { toast } from "react-toastify";
 import Page from "./Page";
 import supabase from "./Storage";
+import { TopProgressBar, SkeletonCards } from "./Loader";
 
 const Files = () => {
 
@@ -8,6 +10,7 @@ const Files = () => {
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [isFetching, setIsFetching] = useState(true);
 
   const handleFileChange = (e) => {
     setFiles(e.target.files);
@@ -97,9 +100,10 @@ const Files = () => {
       // Clear the file input after upload
       setFiles([]);
       document.getElementById('file-input').value = '';
+      toast.success("File(s) uploaded successfully");
       fetchFiles();
     } catch (error) {
-      alert("Error uploading file. Check the console for details.");
+      toast.error("Error uploading file. Check the console for details.");
       console.error("Error uploading files to Supabase:", error.message);
     } finally {
       setIsUploading(false);
@@ -153,13 +157,16 @@ const Files = () => {
       }
       
       await response.json();
+      toast.success("File deleted");
       fetchFiles();
     } catch (error) {
       console.error("Error deleting file from Supabase:", error.message);
+      toast.error("Failed to delete file.");
     }
   };
 
   const fetchFiles = async () => {
+    setIsFetching(true);
     try {
       const response = await fetch("https://multer-3w57.onrender.com/fetchdocuments");
       if (!response.ok) {
@@ -176,6 +183,9 @@ const Files = () => {
       setUploadedFiles(fileList);
     } catch (error) {
       console.error("Error fetching files:", error);
+      toast.error("Couldn't load your files. Please try again.");
+    } finally {
+      setIsFetching(false);
     }
   };
 
@@ -185,6 +195,7 @@ const Files = () => {
 
   return (
     <>
+      <TopProgressBar active={isFetching || isUploading} />
       <Page />
       <main className="main-content">
         <div className="container">
@@ -257,7 +268,9 @@ const Files = () => {
           {/* Files Grid */}
           <section>
             <h2 className="mb-4">Your Files</h2>
-            {uploadedFiles.length > 0 ? (
+            {isFetching && uploadedFiles.length === 0 ? (
+              <SkeletonCards count={6} />
+            ) : uploadedFiles.length > 0 ? (
               <div className="files-grid fade-in-up">
                 {uploadedFiles.map((file, index) => (
                   <div key={index} className="file-card card">

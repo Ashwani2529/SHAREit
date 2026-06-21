@@ -1,4 +1,5 @@
 import React from "react";
+import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./App.css";
 import Files from "./components/Files";
@@ -12,6 +13,12 @@ import Page from "./components/Page";
 const App = () => {
   return (
     <div className="app-container">
+      <ToastContainer
+        position="bottom-right"
+        autoClose={2500}
+        theme="dark"
+        newestOnTop
+      />
       <Router>
         <Routes>
           <Route path="/" element={<Page />} />

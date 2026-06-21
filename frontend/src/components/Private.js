@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 import Page from "./Page";
-import Button from "react-bootstrap/Button";
-import Modal from "react-bootstrap/Modal";
+import AppModal from "./AppModal";
+import { TopProgressBar, SkeletonCards } from "./Loader";
 import supabase from "./Storage";
 
 const Private = () => {
@@ -18,6 +19,7 @@ const Private = () => {
     const [showModal, setShowModal] = useState(false);
     const [modalInputValue, setModalInputValue] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const [isFetching, setIsFetching] = useState(true);
     const navigate = useNavigate();
  // Fetch all text items from the backend
   const fetchItems = async () => {
@@ -88,9 +90,10 @@ const handleSubmit = async (type) => {
       setFiles([]);
       const inputEl = document.getElementById("file-input");
       if (inputEl) inputEl.value = "";
+      toast.success("File(s) uploaded successfully");
       fetchFiles();
     } catch (error) {
-      alert("Error uploading file. Check the console for details.");
+      toast.error("Error uploading file. Check the console for details.");
       console.error("Error uploading files to Supabase:", error.message);
     } finally {
       setIsUploading(false);
@@ -118,9 +121,11 @@ const handleSubmit = async (type) => {
 
         setEditIndex(null);
         setShowModal(false);
+        toast.success("Text updated");
         fetchItems();
       } catch (error) {
         console.error("Error updating item:", error);
+        toast.error("Failed to update text.");
       } finally {
         setIsLoading(false);
       }
@@ -139,9 +144,11 @@ const handleSubmit = async (type) => {
 
         const data = await response.json();
         setItems([...items, data.text]);
+        toast.success("Text added");
         fetchItems();
       } catch (error) {
         console.error("Error adding item:", error);
+        toast.error("Failed to add text.");
       } finally {
         setIsLoading(false);
       }
@@ -180,6 +187,7 @@ const handleDelete = async (idOrFileName, type) => {
       }
 
       await response.json();
+      toast.success("File deleted");
       fetchFiles();
     } else if (type === "text") {
       // Delete text from backend
@@ -196,10 +204,12 @@ const handleDelete = async (idOrFileName, type) => {
 
       // Update local state
       setItems((prev) => prev.filter((item) => item._id !== idOrFileName));
+      toast.success("Text deleted");
       fetchItems();
     }
   } catch (error) {
     console.error("Error deleting item:", error.message);
+    toast.error("Failed to delete.");
   } finally {
     setIsLoading(false);
   }
@@ -210,9 +220,10 @@ const handleDelete = async (idOrFileName, type) => {
   const handleCopy = async (text) => {
     try {
       await navigator.clipboard.writeText(text || "");
-      // You could add a toast notification here
+      toast.success("Copied to clipboard");
     } catch (error) {
       console.error("Failed to copy text:", error);
+      toast.error("Couldn't copy to clipboard.");
     }
   };
 
@@ -262,6 +273,7 @@ useEffect(() => {
   }
 
   async function checkPasswordAndFetch() {
+    setIsFetching(true);
     try {
       const res = await fetch("https://multer-3w57.onrender.com/checkpassword", {
         method: "GET",
@@ -278,13 +290,14 @@ useEffect(() => {
 
       const data = await res.json();
       if (data.valid) {
-        fetchItems();
-        fetchFiles();
+        await Promise.all([fetchItems(), fetchFiles()]);
       } else {
         throw new Error("Invalid password");
       }
     } catch (err) {
       setError(err.message);
+    } finally {
+      setIsFetching(false);
     }
   }
 
@@ -378,9 +391,10 @@ useEffect(() => {
       console.error("Error fetching files:", error);
     }
   };
-if (error) return <div>{error}</div>;
+if (error) return <div className="container" style={{ padding: "2rem" }}>{error}</div>;
   return (
     <>
+  <TopProgressBar active={isFetching || isUploading || isLoading} />
   <Page />
   <div className="flex" style={{ gap: "1rem" }}>
     <main className="main-content" style={{ width: "100%" }}>
@@ -502,6 +516,10 @@ if (error) return <div>{error}</div>;
               ...uploadedFiles.map((file) => ({ kind: 'file', id: file.name, file })),
               ...items.map((t) => ({ kind: 'text', id: t?._id, text: t })),
             ];
+
+            if (isFetching && mergedItems.length === 0) {
+              return <SkeletonCards count={6} />;
+            }
 
             return mergedItems.length > 0 ? (
               <div className="mixed-grid fade-in-up">
@@ -626,52 +644,50 @@ if (error) return <div>{error}</div>;
       </div>
     </main>
 
-    {/* Edit Modal (unchanged) */}
-    <Modal show={showModal} onHide={handleCloseModal} centered className="custom-modal">
-      <Modal.Header closeButton className="modal-header-custom">
-        <Modal.Title>
-          <i className="bx bx-edit"></i>
-          Edit Text
-        </Modal.Title>
-      </Modal.Header>
-      <Modal.Body className="modal-body-custom">
-        <div className="input-group">
-          <label htmlFor="modal-text-input" className="input-label">Text Content</label>
-          <textarea
-            id="modal-text-input"
-            value={modalInputValue}
-            onChange={(e) => setModalInputValue(e.target.value)}
-            className="form-control"
-            rows="4"
-            placeholder="Enter your text content..."
-          />
-        </div>
-      </Modal.Body>
-      <Modal.Footer className="modal-footer-custom">
-        <Button variant="outline-secondary" onClick={handleCloseModal} className="btn btn-outline">
-          <i className="bx bx-x"></i>
-          Cancel
-        </Button>
-        <Button
-          variant="primary"
-          onClick={handleSubmit.bind(null, "text")}
-          disabled={!modalInputValue.trim() || isLoading}
-          className={`btn btn-primary ${isLoading ? 'loading' : ''}`}
-        >
-          {isLoading ? (
-            <>
-              <span className="spinner"></span>
-              Saving...
-            </>
-          ) : (
-            <>
-              <i className="bx bx-check"></i>
-              Save Changes
-            </>
-          )}
-        </Button>
-      </Modal.Footer>
-    </Modal>
+    {/* Edit Modal */}
+    <AppModal
+      show={showModal}
+      onClose={handleCloseModal}
+      title="Edit Text"
+      icon={<i className="bx bx-edit"></i>}
+      footer={
+        <>
+          <button type="button" onClick={handleCloseModal} className="btn btn-outline">
+            <i className="bx bx-x"></i>
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit.bind(null, "text")}
+            disabled={!modalInputValue.trim() || isLoading}
+            className={`btn btn-primary ${isLoading ? 'loading' : ''}`}
+          >
+            {isLoading ? (
+              <>
+                <span className="spinner"></span>
+                Saving...
+              </>
+            ) : (
+              <>
+                <i className="bx bx-check"></i>
+                Save Changes
+              </>
+            )}
+          </button>
+        </>
+      }
+    >
+      <div className="input-group">
+        <label htmlFor="modal-text-input" className="input-label">Text Content</label>
+        <textarea
+          id="modal-text-input"
+          value={modalInputValue}
+          onChange={(e) => setModalInputValue(e.target.value)}
+          className="form-control"
+          placeholder="Enter your text content..."
+        />
+      </div>
+    </AppModal>
   </div>
 
   {/* Styles (additions for mixed grid/cards) */}
