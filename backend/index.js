@@ -37,26 +37,73 @@ mongoose.connect(process.env.MONGO_URL, {
 });
 
 const documentSchema = new mongoose.Schema({
+  // Generated per upload, so the name is free to repeat. Sparse because
+  // documents saved before this field existed don't have one.
+  documentId: { type: String, unique: true, sparse: true },
   documentName: String,
   documentType: String,
   documentSize: Number,
+  storagePath: String,
   isPrivate: { type: Boolean, default: false },
-  documentUrl:{type: String, required: true}, 
+  documentUrl:{type: String, required: true},
   uploadedAt: { type: Date, default: Date.now },
 });
 const Document = mongoose.model("Document", documentSchema);
 
-// DELETE API: Delete a document by ID
+const pad = (value, length = 2) => String(value).padStart(length, "0");
+
+const formatTimestamp = (date) =>
+  [
+    date.getFullYear(),
+    pad(date.getMonth() + 1),
+    pad(date.getDate()),
+    pad(date.getHours()),
+    pad(date.getMinutes()),
+    pad(date.getSeconds()),
+    pad(date.getMilliseconds(), 3),
+  ].join(":");
+
+// `<name>_<yyyy:mm:dd:hh:mm:ss:ms>`. The client builds this alongside the
+// storage path it uploaded to; this is the fallback when it doesn't.
+const buildDocumentId = (name, date) => `${name}_${formatTimestamp(date)}`;
+
+const formatDocument = (doc) => ({
+  id: doc._id,
+  documentId: doc.documentId,
+  name: doc.documentName,
+  type: doc.documentType,
+  url: doc.documentUrl,
+  size: doc.documentSize,
+  storagePath: doc.storagePath || `uploads/${doc.documentName}`,
+  uploadedAt: doc.uploadedAt,
+  isPrivate: doc.isPrivate,
+});
+
+// DELETE API: Delete a document by its _id or generated documentId
 app.delete("/deletedocument/:id", async (req, res) => {
   try {
-    if(!req.params.id){
+    const id = req.params.id;
+    if(!id){
       return res.status(400).json({ error: "Document ID is required" });
     }
-    const document = await Document.deleteOne({ documentName: (req.params.id).toString() });
+
+    const matchers = [{ documentId: id }];
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      matchers.push({ _id: id });
+    }
+
+    // Documents saved before ids existed can only be found by name.
+    const document =
+      (await Document.findOneAndDelete({ $or: matchers })) ||
+      (await Document.findOneAndDelete({ documentName: id }));
+
     if (!document) {
       return res.status(404).json({ error: "Document not found" });
     }
-    res.json({ message: "Document deleted successfully" });
+    res.json({
+      message: "Document deleted successfully",
+      storagePath: document.storagePath || `uploads/${document.documentName}`,
+    });
   } catch (error) {
     console.error("Error deleting document:", error.message);
     res.status(500).json({ error: "Server error" });
@@ -67,15 +114,7 @@ app.delete("/deletedocument/:id", async (req, res) => {
 app.get("/fetchdocuments", async (req, res) => {
   try {
     const documents = (await Document.find()).filter(doc => !doc.isPrivate);
-    const formattedDocuments = documents.map((doc) => ({
-      id: doc._id,
-      name: doc.documentName,
-      type: doc.documentType,
-      url: doc.documentUrl, 
-      size: doc.documentSize,
-      uploadedAt: doc.uploadedAt,
-    }));
-    res.json({ documents: formattedDocuments });
+    res.json({ documents: documents.map(formatDocument) });
   } catch (error) {
     console.error("Error fetching documents:", error.message);
     res.status(500).json({ error: "Server error" });
@@ -96,15 +135,7 @@ app.get("/checkpassword", async (req, res) => {
 app.get("/fetchprivatedocuments", passwordAuth,async (req, res) => {
   try {
     const documents = await Document.find({ isPrivate: true });
-    const formattedDocuments = documents.map((doc) => ({
-      id: doc._id,
-      name: doc.documentName,
-      type: doc.documentType,
-      url: doc.documentUrl, 
-      size: doc.documentSize,
-      uploadedAt: doc.uploadedAt,
-    }));
-    res.json({ documents: formattedDocuments });
+    res.json({ documents: documents.map(formatDocument) });
   } catch (error) {
     console.error("Error fetching documents:", error.message);
     res.status(500).json({ error: "Server error" });
@@ -120,21 +151,16 @@ app.post("/uploaddocument", async (req, res) => {
           throw new Error("Provide Document url");
         }
         const newDocument = await Document.create({
+          documentId:
+            doc.documentId || buildDocumentId(doc.name, new Date()),
           documentName: doc.name,
           documentType: doc.type,
           documentSize: doc.size,
+          storagePath: doc.storagePath,
           isPrivate: isPrivate || false,
           documentUrl: doc.url,
         });
-        return {
-          id: newDocument._id,
-          name: newDocument.documentName,
-          type: newDocument.documentType,
-          size: newDocument.documentSize,
-          url: newDocument.documentUrl, 
-          uploadedAt: newDocument.uploadedAt,
-          isPrivate: newDocument.isPrivate,
-        };
+        return formatDocument(newDocument);
       })
     );
     res.json({

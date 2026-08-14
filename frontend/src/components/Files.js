@@ -3,6 +3,7 @@ import { toast } from "react-toastify";
 import Page from "./Page";
 import supabase from "./Storage";
 import { TopProgressBar, SkeletonCards } from "./Loader";
+import { buildIdentities } from "../utils/fileIdentity";
 
 const Files = () => {
 
@@ -56,33 +57,40 @@ const Files = () => {
     
     setIsUploading(true);
     try {
-      const uploadPromises = Array.from(files).map(async (file) => {
-        const { error } = await supabase.storage
-          .from("fileshare-bucket")
-          .upload(`uploads/${file.name}`, file, {
-            cacheControl: "3600",
-            upsert: false,
-          });
+      // Each file goes to its own generated path, so re-uploading a name that
+      // already exists is fine. The file itself is sent as-is — no resizing,
+      // no compression.
+      const uploadPromises = buildIdentities(files).map(
+        async ({ file, documentId, storagePath }) => {
+          const { error } = await supabase.storage
+            .from("fileshare-bucket")
+            .upload(storagePath, file, {
+              cacheControl: "3600",
+              upsert: false,
+              contentType: file.type || "application/octet-stream",
+            });
 
-        if (error) {
-          throw error;
+          if (error) {
+            throw error;
+          }
+
+          const { data: publicUrlData } = supabase.storage
+            .from("fileshare-bucket")
+            .getPublicUrl(storagePath);
+
+          return {
+            documentId,
+            storagePath,
+            name: file.name,
+            type: file.type,
+            url: publicUrlData.publicUrl,
+            size: file.size,
+          };
         }
-
-        const { data: publicUrlData } = supabase.storage
-          .from("fileshare-bucket")
-          .getPublicUrl(`uploads/${file.name}`);
-
-        return {
-          name: file.name,
-          type: file.type,
-          url: publicUrlData.publicUrl,
-          size: file.size,
-        };
-      });
+      );
       
       const uploadedFilesData = await Promise.all(uploadPromises);
-      setUploadedFiles((prev) => [...prev, ...uploadedFilesData]);
-      
+
       //upload to backend
       const response = await fetch("https://multer-3w57.onrender.com/uploaddocument", {
         method: "POST",
@@ -91,12 +99,14 @@ const Files = () => {
         },
         body: JSON.stringify({ documents: uploadedFilesData }),
       });
-      
+
       if (!response.ok) {
         throw new Error("Failed to upload files to backend");
       }
-      
-      await response.json();
+
+      // Show the saved records, so every new card already carries its id
+      const saved = await response.json();
+      setUploadedFiles((prev) => [...prev, ...(saved.files || [])]);
       // Clear the file input after upload
       setFiles([]);
       document.getElementById('file-input').value = '';
@@ -134,19 +144,19 @@ const Files = () => {
     window.open(file.url, "_blank");
   };
 
-  const handleDelete = async (fileName) => {
+  const handleDelete = async (file) => {
     if (!window.confirm('Are you sure you want to delete this file?')) return;
-    
+
     try {
       await supabase.storage
         .from("fileshare-bucket")
-        .remove([`uploads/${fileName}`]);
+        .remove([file.storagePath || `uploads/${file.name}`]);
 
-      setUploadedFiles((prev) => prev.filter((file) => file.name !== fileName));
-      
-      // Delete from backend
+      setUploadedFiles((prev) => prev.filter((item) => item.id !== file.id));
+
+      // Delete from backend by id, so same-named files stay independent
       const response = await fetch(
-        `https://multer-3w57.onrender.com/deletedocument/${fileName}`,
+        `https://multer-3w57.onrender.com/deletedocument/${encodeURIComponent(file.id)}`,
         {
           method: "DELETE",
         }
@@ -175,6 +185,9 @@ const Files = () => {
 
       const data = await response.json();
       const fileList = data.documents.map((file) => ({
+        id: file.id,
+        documentId: file.documentId,
+        storagePath: file.storagePath,
         name: file.name,
         type: file.type || "Unknown",
         url: file.url,
@@ -218,7 +231,7 @@ const Files = () => {
                 }
               </div>
               <p className="upload-subtext">
-                Support for any file type up to 10MB per file
+                Any file type, stored at its original size — duplicate names are fine
               </p>
               <div className="upload-actions">
                 <input
@@ -273,7 +286,7 @@ const Files = () => {
             ) : uploadedFiles.length > 0 ? (
               <div className="files-grid fade-in-up">
                 {uploadedFiles.map((file, index) => (
-                  <div key={index} className="file-card card">
+                  <div key={file.id || file.documentId || index} className="file-card card">
                     <div className="file-info">
                       <div className="file-name">
                         <i className={`bx ${getFileIcon(file.type)}`}></i>
@@ -302,7 +315,7 @@ const Files = () => {
                         Download
                       </button>
                       <button 
-                        onClick={() => handleDelete(file.name)}
+                        onClick={() => handleDelete(file)}
                         className="btn btn-danger"
                         title="Delete file"
                       >

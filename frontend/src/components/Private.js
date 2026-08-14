@@ -5,6 +5,7 @@ import Page from "./Page";
 import AppModal from "./AppModal";
 import { TopProgressBar, SkeletonCards } from "./Loader";
 import supabase from "./Storage";
+import { buildIdentities } from "../utils/fileIdentity";
 
 const Private = () => {
 
@@ -50,29 +51,36 @@ const handleSubmit = async (type) => {
 
     setIsUploading(true);
     try {
-      const uploadPromises = Array.from(files).map(async (file) => {
-        const { error } = await supabase.storage
-          .from("fileshare-bucket")
-          .upload(`uploads/${file.name}`, file, {
-            cacheControl: "3600",
-            upsert: false,
-          });
-        if (error) throw error;
+      // Each file goes to its own generated path, so re-uploading a name that
+      // already exists is fine. The file itself is sent as-is — no resizing,
+      // no compression.
+      const uploadPromises = buildIdentities(files).map(
+        async ({ file, documentId, storagePath }) => {
+          const { error } = await supabase.storage
+            .from("fileshare-bucket")
+            .upload(storagePath, file, {
+              cacheControl: "3600",
+              upsert: false,
+              contentType: file.type || "application/octet-stream",
+            });
+          if (error) throw error;
 
-        const { data: publicUrlData } = supabase.storage
-          .from("fileshare-bucket")
-          .getPublicUrl(`uploads/${file.name}`);
+          const { data: publicUrlData } = supabase.storage
+            .from("fileshare-bucket")
+            .getPublicUrl(storagePath);
 
-        return {
-          name: file.name,
-          type: file.type,
-          url: publicUrlData.publicUrl,
-          size: file.size,
-        };
-      });
+          return {
+            documentId,
+            storagePath,
+            name: file.name,
+            type: file.type,
+            url: publicUrlData.publicUrl,
+            size: file.size,
+          };
+        }
+      );
 
       const uploadedFilesData = await Promise.all(uploadPromises);
-      setUploadedFiles((prev) => [...prev, ...uploadedFilesData]);
 
       // Save metadata to backend
       const response = await fetch(
@@ -84,7 +92,10 @@ const handleSubmit = async (type) => {
         }
       );
       if (!response.ok) throw new Error("Failed to upload files to backend");
-      await response.json();
+
+      // Show the saved records, so every new card already carries its id
+      const saved = await response.json();
+      setUploadedFiles((prev) => [...prev, ...(saved.files || [])]);
 
       // Clear file input & refresh
       setFiles([]);
@@ -159,7 +170,8 @@ const handleSubmit = async (type) => {
 };
 
 
-const handleDelete = async (idOrFileName, type) => {
+// `target` is the file object for files, and the record id for texts.
+const handleDelete = async (target, type) => {
   if (!window.confirm('Are you sure you want to delete this?')) return;
 
   setIsLoading(true);
@@ -169,14 +181,14 @@ const handleDelete = async (idOrFileName, type) => {
       // Delete file from Supabase
       await supabase.storage
         .from("fileshare-bucket")
-        .remove([`uploads/${idOrFileName}`]);
+        .remove([target.storagePath || `uploads/${target.name}`]);
 
       // Update local state
-      setUploadedFiles((prev) => prev.filter((file) => file.name !== idOrFileName));
+      setUploadedFiles((prev) => prev.filter((file) => file.id !== target.id));
 
-      // Delete file record from backend
+      // Delete file record from backend by id, so same-named files stay independent
       const response = await fetch(
-        `https://multer-3w57.onrender.com/deletedocument/${idOrFileName}`,
+        `https://multer-3w57.onrender.com/deletedocument/${encodeURIComponent(target.id)}`,
         {
           method: "DELETE",
         }
@@ -191,7 +203,7 @@ const handleDelete = async (idOrFileName, type) => {
       fetchFiles();
     } else if (type === "text") {
       // Delete text from backend
-      const response = await fetch(`https://multer-3w57.onrender.com/texts/${idOrFileName}`, {
+      const response = await fetch(`https://multer-3w57.onrender.com/texts/${target}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
@@ -203,7 +215,7 @@ const handleDelete = async (idOrFileName, type) => {
       }
 
       // Update local state
-      setItems((prev) => prev.filter((item) => item._id !== idOrFileName));
+      setItems((prev) => prev.filter((item) => item._id !== target));
       toast.success("Text deleted");
       fetchItems();
     }
@@ -381,6 +393,9 @@ useEffect(() => {
 
       const data = await response.json();
       const fileList = data.documents.map((file) => ({
+        id: file.id,
+        documentId: file.documentId,
+        storagePath: file.storagePath,
         name: file.name,
         type: file.type || "Unknown",
         url: file.url,
@@ -419,7 +434,9 @@ if (error) return <div className="container" style={{ padding: "2rem" }}>{error}
                   ? `${files.length} file(s) selected`
                   : "Drop files here or click to browse"}
               </div>
-              <p className="upload-subtext">Support for any file type up to 10MB per file</p>
+              <p className="upload-subtext">
+                Any file type, stored at its original size — duplicate names are fine
+              </p>
 
               <div className="upload-actions">
                 <input
@@ -513,7 +530,7 @@ if (error) return <div className="container" style={{ padding: "2rem" }}>{error}
           {(() => {
             // normalize into a single mixed array
             const mergedItems = [
-              ...uploadedFiles.map((file) => ({ kind: 'file', id: file.name, file })),
+              ...uploadedFiles.map((file) => ({ kind: 'file', id: file.id, file })),
               ...items.map((t) => ({ kind: 'text', id: t?._id, text: t })),
             ];
 
@@ -527,7 +544,7 @@ if (error) return <div className="container" style={{ padding: "2rem" }}>{error}
                   if (m.kind === 'file') {
                     const file = m.file;
                     return (
-                      <div key={`file-${file.name}-${index}`} className="card mixed-card">
+                      <div key={`file-${m.id || file.name}-${index}`} className="card mixed-card">
                         <div className="file-info">
                           <div className="file-name">
                             <i className={`bx ${getFileIcon(file.type)}`}></i>
@@ -556,7 +573,7 @@ if (error) return <div className="container" style={{ padding: "2rem" }}>{error}
                             Download
                           </button>
                           <button
-                            onClick={() => handleDelete(file.name, "file")}
+                            onClick={() => handleDelete(file, "file")}
                             className="btn btn-danger"
                             title="Delete file"
                           >
