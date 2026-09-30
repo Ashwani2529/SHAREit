@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 import "../App.css";
 import { endSession, getSession, SESSION_EXPIRED_EVENT } from "../utils/session";
 
@@ -23,10 +24,13 @@ const Page = () => {
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleExpired);
   }, []);
 
-  const handleExit = () => {
+  const handleLeave = () => {
     setIsMenuOpen(false);
-    endSession();
+    // Leave the guarded page first, so its own guard doesn't race us to /login.
     navigate("/");
+    endSession();
+    setSession(null);
+    toast.info("You've left the room");
   };
 
   return (
@@ -78,29 +82,20 @@ const Page = () => {
                 Text
               </Link>
             </li>
-            <li>
-              {/* The room you're in, or the way into one. */}
-              {session ? (
+            {/* Status pill, not a tab: shows the room you're in and leaves it. */}
+            {session && (
+              <li className="nav-room">
                 <button
                   type="button"
-                  className="nav-link nav-link-button"
-                  onClick={handleExit}
+                  className="nav-room-chip"
+                  onClick={handleLeave}
                   title={`Leave room ${session.roomNumber}`}
                 >
                   <i className="bx bx-log-out"></i>
                   {session.roomNumber || "Leave room"}
                 </button>
-              ) : (
-                <Link
-                  to="/login"
-                  className={`nav-link ${isActive('/login') ? 'active' : ''}`}
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  <i className="bx bx-lock-open"></i>
-                  My Room
-                </Link>
-              )}
-            </li>
+              </li>
+            )}
           </ul>
         </nav>
       </header>
@@ -123,12 +118,6 @@ const Page = () => {
                 <i className="bx bx-text"></i>
                 Manage Text
               </Link>
-              {!session && (
-                <Link to="/login" className="btn btn-outline">
-                  <i className="bx bx-lock-open"></i>
-                  Enter Room
-                </Link>
-              )}
             </div>
           </div>
         </section>

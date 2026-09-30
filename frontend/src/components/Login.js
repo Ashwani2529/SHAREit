@@ -6,10 +6,14 @@ import { TopProgressBar } from "./Loader";
 import { API_BASE, saveSession } from "../utils/session";
 
 /**
- * Room gate. A room number that doesn't exist yet is created with the PIN
- * entered here, so the first visit doubles as sign-up. The PIN is base64
- * encoded (btoa) before it leaves the browser; the backend stores only a
- * bcrypt hash of it.
+ * Room gate for the Files and Text tabs. A room number that doesn't exist yet
+ * is created with the PIN entered here, so the first visit doubles as sign-up.
+ * The PIN is base64 encoded (btoa) before it leaves the browser; the backend
+ * stores only a bcrypt hash of it.
+ *
+ * Class names here deliberately avoid `input-group`, `text-muted` and friends:
+ * index.html pulls in Bootstrap, which claims those names and fights the app's
+ * own styles.
  */
 const Login = () => {
   const [roomNumber, setRoomNumber] = useState("");
@@ -72,8 +76,8 @@ const Login = () => {
               created with the PIN you set here.
             </p>
 
-            <div className="input-group mb-4">
-              <label htmlFor="room-number" className="input-label">
+            <div className="room-gate-field">
+              <label htmlFor="room-number" className="room-gate-label">
                 Room number
               </label>
               <input
@@ -82,15 +86,15 @@ const Login = () => {
                 value={roomNumber}
                 onChange={(e) => setRoomNumber(e.target.value.toUpperCase())}
                 placeholder="e.g. ASH7985"
-                className="form-control"
+                className="room-gate-input"
                 autoComplete="off"
                 autoCapitalize="characters"
                 spellCheck="false"
               />
             </div>
 
-            <div className="input-group mb-4">
-              <label htmlFor="room-pin" className="input-label">
+            <div className="room-gate-field">
+              <label htmlFor="room-pin" className="room-gate-label">
                 PIN
               </label>
               <input
@@ -99,13 +103,13 @@ const Login = () => {
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
                 placeholder="At least 4 characters"
-                className="form-control"
+                className="room-gate-input"
                 autoComplete="current-password"
               />
             </div>
 
             {err && (
-              <div className="room-gate-error text-error mb-4">
+              <div className="room-gate-error">
                 <i className="bx bx-error-circle"></i>
                 {err}
               </div>
@@ -129,7 +133,7 @@ const Login = () => {
               )}
             </button>
 
-            <p className="room-gate-footnote text-muted">
+            <p className="room-gate-footnote">
               You'll stay signed in on this device for 30 days.
             </p>
           </form>
