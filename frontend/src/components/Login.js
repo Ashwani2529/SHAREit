@@ -85,7 +85,7 @@ const Login = () => {
                 type="text"
                 value={roomNumber}
                 onChange={(e) => setRoomNumber(e.target.value.toUpperCase())}
-                placeholder="e.g. ASH7985"
+                placeholder="e.g. ABC1234"
                 className="room-gate-input"
                 autoComplete="off"
                 autoCapitalize="characters"
