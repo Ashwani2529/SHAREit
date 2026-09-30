@@ -1,10 +1,13 @@
-import React, { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import "../App.css";
+import { endSession, getSession, SESSION_EXPIRED_EVENT } from "../utils/session";
 
 const Page = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [session, setSession] = useState(getSession);
   const location = useLocation();
+  const navigate = useNavigate();
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
@@ -12,6 +15,18 @@ const Page = () => {
 
   const isActive = (path) => {
     return location.pathname === path;
+  };
+
+  useEffect(() => {
+    const handleExpired = () => setSession(null);
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleExpired);
+  }, []);
+
+  const handleExit = () => {
+    setIsMenuOpen(false);
+    endSession();
+    navigate("/");
   };
 
   return (
@@ -23,19 +38,19 @@ const Page = () => {
             <i className="bx bx-cloud-upload"></i>
             SHAREit
           </Link>
-          
-          <button 
+
+          <button
             className="nav-toggle"
             onClick={toggleMenu}
             aria-label="Toggle navigation menu"
           >
             <i className={`bx ${isMenuOpen ? 'bx-x' : 'bx-menu'}`}></i>
           </button>
-          
+
           <ul className={`nav-menu ${isMenuOpen ? 'open' : ''}`}>
             <li>
-              <Link 
-                to="/" 
+              <Link
+                to="/"
                 className={`nav-link ${isActive('/') ? 'active' : ''}`}
                 onClick={() => setIsMenuOpen(false)}
               >
@@ -44,8 +59,8 @@ const Page = () => {
               </Link>
             </li>
             <li>
-              <Link 
-                to="/files" 
+              <Link
+                to="/files"
                 className={`nav-link ${isActive('/files') ? 'active' : ''}`}
                 onClick={() => setIsMenuOpen(false)}
               >
@@ -54,8 +69,8 @@ const Page = () => {
               </Link>
             </li>
             <li>
-              <Link 
-                to="/text" 
+              <Link
+                to="/text"
                 className={`nav-link ${isActive('/text') ? 'active' : ''}`}
                 onClick={() => setIsMenuOpen(false)}
               >
@@ -64,12 +79,27 @@ const Page = () => {
               </Link>
             </li>
             <li>
-              <Link to ="/private" className={`nav-link ${isActive('/private') ? 'active' : ''}`}
-                onClick={() => setIsMenuOpen(false)}
-              >
-                <i className="bx bx-lock"></i>
-                Private
-              </Link>
+              {/* The room you're in, or the way into one. */}
+              {session ? (
+                <button
+                  type="button"
+                  className="nav-link nav-link-button"
+                  onClick={handleExit}
+                  title={`Leave room ${session.roomNumber}`}
+                >
+                  <i className="bx bx-log-out"></i>
+                  {session.roomNumber || "Leave room"}
+                </button>
+              ) : (
+                <Link
+                  to="/login"
+                  className={`nav-link ${isActive('/login') ? 'active' : ''}`}
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  <i className="bx bx-lock-open"></i>
+                  My Room
+                </Link>
+              )}
             </li>
           </ul>
         </nav>
@@ -81,7 +111,7 @@ const Page = () => {
           <div className="container">
             <h1 className="hero-title">Welcome to SHAREit</h1>
             <p className="hero-subtitle">
-              Share files and text snippets effortlessly with our modern, secure platform. 
+              Share files and text snippets effortlessly with our modern, secure platform.
               Upload your files, manage your text content, and access them from anywhere.
             </p>
             <div className="hero-actions">
@@ -93,10 +123,12 @@ const Page = () => {
                 <i className="bx bx-text"></i>
                 Manage Text
               </Link>
-              <Link to="/private" className="btn btn-outline">
-                <i className="bx bx-lock"></i>
-                Private
-              </Link>
+              {!session && (
+                <Link to="/login" className="btn btn-outline">
+                  <i className="bx bx-lock-open"></i>
+                  Enter Room
+                </Link>
+              )}
             </div>
           </div>
         </section>

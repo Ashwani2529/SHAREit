@@ -3,9 +3,9 @@ import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./App.css";
 import Files from "./components/Files";
-import Private from "./components/Private";
 import Text from "./components/Text";
 import Login from "./components/Login";
+import RequireRoom from "./components/RequireRoom";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Page from "./components/Page";
 
@@ -21,13 +21,22 @@ const App = () => {
       />
       <Router>
         <Routes>
+          {/* Home is public; the tabs below belong to a room. */}
           <Route path="/" element={<Page />} />
-          <Route path="/files" element={<Files />} />
-          <Route path="/text" element={<Text />} />
           <Route
-            path="/private"
+            path="/files"
             element={
-              <Private />
+              <RequireRoom>
+                <Files />
+              </RequireRoom>
+            }
+          />
+          <Route
+            path="/text"
+            element={
+              <RequireRoom>
+                <Text />
+              </RequireRoom>
             }
           />
           <Route path="/login" element={<Login />} />

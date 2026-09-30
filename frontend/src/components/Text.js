@@ -3,6 +3,7 @@ import { toast } from "react-toastify";
 import Page from "./Page";
 import AppModal from "./AppModal";
 import { TopProgressBar, SkeletonCards } from "./Loader";
+import { authFetch, SessionExpiredError } from "../utils/session";
 
 const TextManager = () => {
   const [items, setItems] = useState([]);
@@ -13,24 +14,24 @@ const TextManager = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
 
-  // Fetch all text items from the backend
+  // Fetch this room's text items. The backend stores them encrypted and
+  // decrypts on the way out, so what arrives here is already readable.
   const fetchItems = async () => {
     setIsFetching(true);
     try {
-      const response = await fetch("https://multer-3w57.onrender.com/texts", {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+      const response = await authFetch("/texts", { method: "GET" });
       if (!response.ok) {
         throw new Error("Failed to fetch items");
       }
       const data = await response.json();
       setItems(data.texts || []);
     } catch (error) {
-      console.error("Error fetching items:", error);
-      toast.error("Couldn't load your texts. Please try again.");
+      if (error instanceof SessionExpiredError) {
+        toast.info(error.message);
+      } else {
+        console.error("Error fetching items:", error);
+        toast.error("Couldn't load your texts. Please try again.");
+      }
     } finally {
       setIsFetching(false);
     }
@@ -39,32 +40,32 @@ const TextManager = () => {
   // Add or update a text item
   const handleAddOrUpdate = React.useCallback(async () => {
     if (editIndex !== null) {
-      // Update existing item
+      // Update existing item — `editIndex` holds the record id
       setIsLoading(true);
       try {
-        const response = await fetch(
-          `https://multer-3w57.onrender.com/texts/${editIndex}`,
-          {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ text: modalInputValue }),
-          }
-        );
+        const response = await authFetch(`/texts/${editIndex}`, {
+          method: "PUT",
+          body: JSON.stringify({ text: modalInputValue }),
+        });
         if (!response.ok) {
           throw new Error("Failed to update item");
         }
-        const updatedItems = [...items];
-        updatedItems[editIndex] = { ...updatedItems[editIndex], text: modalInputValue };
-        setItems(updatedItems);
+        setItems((prev) =>
+          prev.map((item) =>
+            item._id === editIndex ? { ...item, text: modalInputValue } : item
+          )
+        );
         setEditIndex(null);
         setShowModal(false);
         toast.success("Text updated");
         fetchItems();
       } catch (error) {
-        console.error("Error updating item:", error);
-        toast.error("Failed to update text.");
+        if (error instanceof SessionExpiredError) {
+          toast.info(error.message);
+        } else {
+          console.error("Error updating item:", error);
+          toast.error("Failed to update text.");
+        }
       } finally {
         setIsLoading(false);
       }
@@ -74,29 +75,31 @@ const TextManager = () => {
 
       setIsLoading(true);
       try {
-        const response = await fetch("https://multer-3w57.onrender.com/texts", {
+        const response = await authFetch("/texts", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
           body: JSON.stringify({ text: inputValue }),
         });
         if (!response.ok) {
           throw new Error("Failed to add item");
         }
         const data = await response.json();
-        setItems([...items, data.text]);
+        setItems((prev) => [...prev, data.note]);
         toast.success("Text added");
         fetchItems();
       } catch (error) {
-        console.error("Error adding item:", error);
-        toast.error("Failed to add text.");
+        if (error instanceof SessionExpiredError) {
+          toast.info(error.message);
+        } else {
+          console.error("Error adding item:", error);
+          toast.error("Failed to add text.");
+        }
       } finally {
         setIsLoading(false);
       }
     }
     setInputValue("");
-  }, [editIndex, items, modalInputValue, inputValue]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editIndex, modalInputValue, inputValue]);
 
   // Delete a text item
   const handleDelete = async (id) => {
@@ -104,12 +107,7 @@ const TextManager = () => {
 
     setIsLoading(true);
     try {
-      const response = await fetch(`https://multer-3w57.onrender.com/texts/${id}`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+      const response = await authFetch(`/texts/${id}`, { method: "DELETE" });
       if (!response.ok) {
         throw new Error("Failed to delete item");
       }
@@ -117,8 +115,12 @@ const TextManager = () => {
       toast.success("Text deleted");
       fetchItems();
     } catch (error) {
-      console.error("Error deleting item:", error);
-      toast.error("Failed to delete text.");
+      if (error instanceof SessionExpiredError) {
+        toast.info(error.message);
+      } else {
+        console.error("Error deleting item:", error);
+        toast.error("Failed to delete text.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -176,6 +178,7 @@ const TextManager = () => {
   // Fetch items on component mount
   useEffect(() => {
     fetchItems();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

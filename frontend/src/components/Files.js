@@ -4,6 +4,7 @@ import Page from "./Page";
 import supabase from "./Storage";
 import { TopProgressBar, SkeletonCards } from "./Loader";
 import { buildIdentities } from "../utils/fileIdentity";
+import { authFetch, SessionExpiredError } from "../utils/session";
 
 const Files = () => {
 
@@ -91,12 +92,9 @@ const Files = () => {
       
       const uploadedFilesData = await Promise.all(uploadPromises);
 
-      //upload to backend
-      const response = await fetch("https://multer-3w57.onrender.com/uploaddocument", {
+      // Save the metadata against the room this session belongs to
+      const response = await authFetch("/uploaddocument", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({ documents: uploadedFilesData }),
       });
 
@@ -113,8 +111,12 @@ const Files = () => {
       toast.success("File(s) uploaded successfully");
       fetchFiles();
     } catch (error) {
-      toast.error("Error uploading file. Check the console for details.");
-      console.error("Error uploading files to Supabase:", error.message);
+      if (error instanceof SessionExpiredError) {
+        toast.info(error.message);
+      } else {
+        toast.error("Error uploading file. Check the console for details.");
+        console.error("Error uploading files to Supabase:", error.message);
+      }
     } finally {
       setIsUploading(false);
     }
@@ -155,30 +157,34 @@ const Files = () => {
       setUploadedFiles((prev) => prev.filter((item) => item.id !== file.id));
 
       // Delete from backend by id, so same-named files stay independent
-      const response = await fetch(
-        `https://multer-3w57.onrender.com/deletedocument/${encodeURIComponent(file.id)}`,
+      const response = await authFetch(
+        `/deletedocument/${encodeURIComponent(file.id)}`,
         {
           method: "DELETE",
         }
       );
-      
+
       if (!response.ok) {
         throw new Error("Failed to delete file from backend");
       }
-      
+
       await response.json();
       toast.success("File deleted");
       fetchFiles();
     } catch (error) {
-      console.error("Error deleting file from Supabase:", error.message);
-      toast.error("Failed to delete file.");
+      if (error instanceof SessionExpiredError) {
+        toast.info(error.message);
+      } else {
+        console.error("Error deleting file from Supabase:", error.message);
+        toast.error("Failed to delete file.");
+      }
     }
   };
 
   const fetchFiles = async () => {
     setIsFetching(true);
     try {
-      const response = await fetch("https://multer-3w57.onrender.com/fetchdocuments");
+      const response = await authFetch("/fetchdocuments");
       if (!response.ok) {
         throw new Error("Failed to fetch files");
       }
@@ -195,8 +201,12 @@ const Files = () => {
       }));
       setUploadedFiles(fileList);
     } catch (error) {
-      console.error("Error fetching files:", error);
-      toast.error("Couldn't load your files. Please try again.");
+      if (error instanceof SessionExpiredError) {
+        toast.info(error.message);
+      } else {
+        console.error("Error fetching files:", error);
+        toast.error("Couldn't load your files. Please try again.");
+      }
     } finally {
       setIsFetching(false);
     }
@@ -204,6 +214,7 @@ const Files = () => {
 
   useEffect(() => {
     fetchFiles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
